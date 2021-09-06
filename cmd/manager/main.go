@@ -19,6 +19,7 @@ import (
 	"github.com/go-logr/zapr"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/open-cluster-management/hub-of-hubs-nonk8s-api/pkg/authentication"
+	"github.com/open-cluster-management/hub-of-hubs-nonk8s-api/pkg/managedclusters"
 	"go.uber.org/zap"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -71,7 +72,8 @@ func doMain() int {
 	}
 	defer dbConnectionPool.Close()
 
-	srv := createServer(clusterAPIURL)
+	srv := createServer(clusterAPIURL, dbConnectionPool)
+
 	// Initializing the server in a goroutine so that
 	// it won't block the graceful shutdown handling below
 	go func() {
@@ -104,13 +106,11 @@ func doMain() int {
 	return 0
 }
 
-func createServer(clusterAPIURL string) *http.Server {
+func createServer(clusterAPIURL string, dbConnectionPool *pgxpool.Pool) *http.Server {
 	router := gin.Default()
 
 	router.Use(authentication.Authentication(clusterAPIURL))
-	router.GET("/", func(c *gin.Context) {
-		c.String(http.StatusOK, "Welcome Gin Server")
-	})
+	router.GET("/managedclusters", managedclusters.ManagedClusters(dbConnectionPool))
 
 	return &http.Server{
 		Addr:    ":8080",
