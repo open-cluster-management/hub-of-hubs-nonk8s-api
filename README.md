@@ -36,7 +36,7 @@ python -c "import sys, urllib as ul; print ul.quote_plus(sys.argv[1])" 'YourPass
 ```
 
 ```
-./bin/hub-of-hubs-nonk8s-api --kubeconfig $TOP_HUB_CONFIG
+./bin/hub-of-hubs-nonk8s-api
 ```
 
 ## Build image
