@@ -3,6 +3,7 @@ module github.com/open-cluster-management/hub-of-hubs-nonk8s-api
 go 1.16
 
 require (
+	github.com/gin-gonic/gin v1.7.4
 	github.com/go-logr/logr v0.2.1
 	github.com/go-logr/zapr v0.2.0
 	github.com/jackc/pgx/v4 v4.11.0
