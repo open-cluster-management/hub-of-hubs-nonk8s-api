@@ -1,0 +1,185 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${COMPONENT}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: ${COMPONENT}
+  template:
+    metadata:
+      labels:
+        name: ${COMPONENT}
+    spec:
+      serviceAccountName: ${COMPONENT}
+      containers:
+        - name: ${COMPONENT}
+          image: ${REGISTRY}/${COMPONENT}:${IMAGE_TAG}
+          imagePullPolicy: Always
+          env:
+            - name: WATCH_NAMESPACE
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                 apiVersion: v1
+                 fieldPath: metadata.namespace
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: hub-of-hubs-database-secret
+                  key: url
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: ${COMPONENT}
+subjects:
+- kind: ServiceAccount
+  name: ${COMPONENT}
+  namespace: open-cluster-management
+roleRef:
+  kind: ClusterRole
+  name: ${COMPONENT}
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: ${COMPONENT}
+rules:
+- apiGroups:
+  - "policy.open-cluster-management.io"
+  resources:
+  - policies
+  - policies/finalizers
+  - placementbindings
+  - placementbindings/finalizers
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - "apps.open-cluster-management.io"
+  resources:
+  - placementrules
+  - placementrules/finalizers
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+- apiGroups:
+  - "hub-of-hubs.open-cluster-management.io"
+  resources:
+  - configs
+  - configs/finalizers
+  verbs:
+  - get
+  - list
+  - watch
+  - update # for finalizer
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: ${COMPONENT}
+subjects:
+- kind: ServiceAccount
+  name: ${COMPONENT}
+roleRef:
+  kind: Role
+  name: ${COMPONENT}
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  creationTimestamp: null
+  name: ${COMPONENT}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - services
+  - services/finalizers
+  - endpoints
+  - persistentvolumeclaims
+  - events
+  - configmaps
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - daemonsets
+  - replicasets
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - servicemonitors
+  verbs:
+  - get
+  - create
+- apiGroups:
+  - apps
+  resourceNames:
+  - ${COMPONENT}
+  resources:
+  - deployments/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+- apiGroups:
+  - apps
+  resources:
+  - replicasets
+  - deployments
+  verbs:
+  - get
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ${COMPONENT}
