@@ -2,10 +2,10 @@
 
 # Hub-of-Hubs Spec Sync
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/open-cluster-management/hub-of-hubs-spec-sync)](https://goreportcard.com/report/github.com/open-cluster-management/hub-of-hubs-spec-sync)
-[![License](https://img.shields.io/github/license/open-cluster-management/hub-of-hubs-spec-sync)](/LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/open-cluster-management/hub-of-hubs-spec-sync)](https://goreportcard.com/report/github.com/open-cluster-management/hub-of-hubs-nonk8s-api)
+[![License](https://img.shields.io/github/license/open-cluster-management/hub-of-hubs-nonk8s-api)](/LICENSE)
 
-The spec sync component of [Hub-of-Hubs](https://github.com/open-cluster-management/hub-of-hubs).
+The REST API component of [Hub-of-Hubs](https://github.com/open-cluster-management/hub-of-hubs).
 
 ## Environment variables
 
@@ -22,17 +22,9 @@ make build
 
 ## Run Locally
 
-Disable the currently running controller in the cluster (if previously deployed):
-
-```
-kubectl scale deployment hub-of-hubs-spec-sync --kubeconfig $TOP_HUB_CONFIG -n open-cluster-management --replicas 0
-```
-
 Set the following environment variables:
 
 * DATABASE_URL
-* WATCH_NAMESPACE
-* POD_NAMESPACE
 
 Set the `DATABASE_URL` according to the PostgreSQL URL format: `postgres://YourUserName:YourURLEscapedPassword@YourHostname:5432/YourDatabaseName?sslmode=verify-full&pool_max_conns=50`.
 
@@ -42,12 +34,8 @@ Set the `DATABASE_URL` according to the PostgreSQL URL format: `postgres://YourU
 python -c "import sys, urllib as ul; print ul.quote_plus(sys.argv[1])" 'YourPassword'
 ```
 
-`WATCH_NAMESPACE` can be defined empty so the controller will watch all the namespaces.
-
-`POD_NAMESPACE` should usually be `open-cluster-management`
-
 ```
-./bin/hub-of-hubs-spec-sync --kubeconfig $TOP_HUB_CONFIG
+./bin/hub-of-hubs-nonk8s-api --kubeconfig $TOP_HUB_CONFIG
 ```
 
 ## Build image
