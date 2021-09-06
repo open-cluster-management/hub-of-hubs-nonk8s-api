@@ -26,8 +26,9 @@ import (
 )
 
 const (
-	environmentVariableDatabaseURL = "DATABASE_URL"
-	secondsToFinishOnShutdown      = 5
+	environmentVariableDatabaseURL   = "DATABASE_URL"
+	environmentVariableClusterAPIURL = "CLUSTER_API_URL"
+	secondsToFinishOnShutdown        = 5
 )
 
 func printVersion(log logr.Logger) {
@@ -35,23 +36,31 @@ func printVersion(log logr.Logger) {
 	log.Info(fmt.Sprintf("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH))
 }
 
-// function to handle defers with exit, see https://stackoverflow.com/a/27629493/553720.
-func doMain() int {
-	var log logr.Logger
-
+func newLogger() logr.Logger {
 	zapLog, err := zap.NewDevelopment()
 	if err != nil {
 		//nolint:forbidigo
 		fmt.Printf("failed to create zap log: %v\n", err)
 	}
 
-	log = zapr.NewLogger(zapLog)
+	return zapr.NewLogger(zapLog)
+}
+
+// function to handle defers with exit, see https://stackoverflow.com/a/27629493/553720.
+func doMain() int {
+	log := newLogger()
 
 	printVersion(log)
 
 	databaseURL, found := os.LookupEnv(environmentVariableDatabaseURL)
 	if !found {
 		log.Error(nil, "Not found:", "environment variable", environmentVariableDatabaseURL)
+		return 1
+	}
+
+	clusterAPIURL, found := os.LookupEnv(environmentVariableClusterAPIURL)
+	if !found {
+		log.Error(nil, "Not found:", "environment variable", environmentVariableClusterAPIURL)
 		return 1
 	}
 
@@ -62,7 +71,7 @@ func doMain() int {
 	}
 	defer dbConnectionPool.Close()
 
-	srv := createServer()
+	srv := createServer(clusterAPIURL)
 	// Initializing the server in a goroutine so that
 	// it won't block the graceful shutdown handling below
 	go func() {
@@ -95,10 +104,10 @@ func doMain() int {
 	return 0
 }
 
-func createServer() *http.Server {
+func createServer(clusterAPIURL string) *http.Server {
 	router := gin.Default()
 
-	router.Use(authentication.Authentication())
+	router.Use(authentication.Authentication(clusterAPIURL))
 	router.GET("/", func(c *gin.Context) {
 		c.String(http.StatusOK, "Welcome Gin Server")
 	})
