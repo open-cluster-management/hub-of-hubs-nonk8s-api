@@ -15,11 +15,18 @@ import (
 	userv1 "github.com/openshift/api/user/v1"
 )
 
+const (
+	// UserKey - the key for user string in context.
+	UserKey = "user"
+	// GroupsKey - the key for groups slice of strings in context.
+	GroupsKey = "groups"
+)
+
 // Authentication middleware.
 func Authentication(clusterAPIURL string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authorizationHeader := c.GetHeader("Authorization")
-		if !ok(authorizationHeader, clusterAPIURL) {
+		if !setAuthenticatedUser(c, authorizationHeader, clusterAPIURL) {
 			c.Header("WWW-Authenticate", "")
 			c.AbortWithStatus(http.StatusUnauthorized)
 
@@ -30,7 +37,7 @@ func Authentication(clusterAPIURL string) gin.HandlerFunc {
 	}
 }
 
-func ok(authorizationHeader string, clusterAPIURL string) bool {
+func setAuthenticatedUser(c *gin.Context, authorizationHeader string, clusterAPIURL string) bool {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			//nolint:gosec
@@ -71,6 +78,9 @@ func ok(authorizationHeader string, clusterAPIURL string) bool {
 		fmt.Fprintf(gin.DefaultWriter, "failed to unmarshall json: %v\n", err)
 		return false
 	}
+
+	c.Set(UserKey, user.Name)
+	c.Set(GroupsKey, user.Groups)
 
 	fmt.Fprintf(gin.DefaultWriter, "got authenticated user: %v\n", user.Name)
 	fmt.Fprintf(gin.DefaultWriter, "user groups: %v\n", user.Groups)
