@@ -6,11 +6,13 @@ package authentication
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	userv1 "github.com/openshift/api/user/v1"
 )
 
 // Authentication middleware.
@@ -62,7 +64,16 @@ func ok(authorizationHeader string, clusterAPIURL string) bool {
 		return false
 	}
 
-	fmt.Fprintf(gin.DefaultWriter, "got authenticated user: %v\n", string(body))
+	user := userv1.User{}
+
+	err = json.Unmarshal(body, &user)
+	if err != nil {
+		fmt.Fprintf(gin.DefaultWriter, "failed to unmarshall json: %v\n", err)
+		return false
+	}
+
+	fmt.Fprintf(gin.DefaultWriter, "got authenticated user: %v\n", user.Name)
+	fmt.Fprintf(gin.DefaultWriter, "user groups: %v\n", user.Groups)
 
 	return true
 }

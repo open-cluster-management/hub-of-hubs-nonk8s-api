@@ -7,6 +7,7 @@ require (
 	github.com/go-logr/logr v0.2.1
 	github.com/go-logr/zapr v0.2.0
 	github.com/jackc/pgx/v4 v4.11.0
+	github.com/openshift/api v3.9.0+incompatible
 	go.uber.org/zap v1.19.0
 	k8s.io/client-go v0.20.5
 )
