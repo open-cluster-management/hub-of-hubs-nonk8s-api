@@ -58,3 +58,9 @@ make build-images
     ```
     COMPONENT=$(basename $(pwd)) envsubst < deploy/operator.yaml.template | kubectl apply --kubeconfig $TOP_HUB_CONFIG -n open-cluster-management -f -
     ```
+
+## Test
+
+```
+curl localhost:8080/managedclusters -w "%{http_code}\n" -H "Authorization: Bearer <the OC token or Service Account token from its secret>"
+```
