@@ -121,6 +121,13 @@ func doHandleRowsForWatch(ctx context.Context, w io.Writer, query string, dbConn
 			continue
 		}
 
+		_, err = w.Write([]byte("\n"))
+
+		if err != nil {
+			fmt.Fprintf(gin.DefaultWriter, "error in writing response: %v\n", err)
+			continue
+		}
+
 		w.(http.Flusher).Flush()
 	}
 }
