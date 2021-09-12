@@ -35,6 +35,15 @@ Set the `DATABASE_URL` according to the PostgreSQL URL format: `postgres://YourU
 python -c "import sys, urllib as ul; print ul.quote_plus(sys.argv[1])" 'YourPassword'
 ```
 
+Generate self-signed certificates:
+
+```
+mkdir testdata
+openssl genrsa -out ./testdata/server.key 2048
+openssl req -new -x509 -key ./testdata/server.key -out ./testdata/server.pem -days 365
+```
+
+Run the server
 ```
 ./bin/hub-of-hubs-nonk8s-api
 ```
@@ -62,5 +71,5 @@ make build-images
 ## Test
 
 ```
-curl localhost:8080/managedclusters -w "%{http_code}\n" -H "Authorization: Bearer <the OC token or Service Account token from its secret>"
+curl -k https://localhost:8080/managedclusters -w "%{http_code}\n" -H "Authorization: Bearer <the OC token or Service Account token from its secret>"
 ```

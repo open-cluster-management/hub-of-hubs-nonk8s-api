@@ -77,7 +77,8 @@ func doMain() int {
 	// Initializing the server in a goroutine so that
 	// it won't block the graceful shutdown handling below
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && errors.Is(err, http.ErrServerClosed) {
+		if err := srv.ListenAndServeTLS("./testdata/server.pem",
+			"./testdata/server.key"); err != nil && errors.Is(err, http.ErrServerClosed) {
 			log.Error(err, "listenAndServe returned")
 		}
 	}()
