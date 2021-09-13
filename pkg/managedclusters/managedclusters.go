@@ -127,9 +127,9 @@ func doHandleRowsForWatch(ctx context.Context, w io.Writer, query string, dbConn
 			fmt.Fprintf(gin.DefaultWriter, "error in writing response: %v\n", err)
 			continue
 		}
-
-		w.(http.Flusher).Flush()
 	}
+
+	w.(http.Flusher).Flush()
 }
 
 func handleRows(c *gin.Context, query string, dbConnectionPool *pgxpool.Pool) {
