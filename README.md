@@ -71,5 +71,13 @@ make build-images
 ## Test
 
 ```
-curl -k https://localhost:8080/managedclusters -w "%{http_code}\n" -H "Authorization: Bearer <the OC token or Service Account token from its secret>"
+export TOKEN=<the OC token or Service Account token from its secret>
+```
+
+```
+curl -k https://localhost:8080/managedclusters -w "%{http_code}\n" -H "Authorization: Bearer $TOKEN"
+```
+
+```
+curl -ks https://localhost:8080/managedclusters  -H "Authorization: Bearer $TOKEN" | jq .[].metadata.name
 ```
