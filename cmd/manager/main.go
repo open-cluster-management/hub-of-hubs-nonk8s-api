@@ -27,10 +27,13 @@ import (
 )
 
 const (
-	environmentVariableDatabaseURL   = "DATABASE_URL"
-	environmentVariableClusterAPIURL = "CLUSTER_API_URL"
-	secondsToFinishOnShutdown        = 5
+	environmentVariableDatabaseURL      = "DATABASE_URL"
+	environmentVariableClusterAPIURL    = "CLUSTER_API_URL"
+	environmentVariableAuthorizationURL = "AUTHORIZATION_URL"
+	secondsToFinishOnShutdown           = 5
 )
+
+var errEnvironmentVariableNotFound = errors.New("not found environment variable")
 
 func printVersion(log logr.Logger) {
 	log.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
@@ -47,21 +50,34 @@ func newLogger() logr.Logger {
 	return zapr.NewLogger(zapLog)
 }
 
+func readEnvironmentVariables() (string, string, string, error) {
+	databaseURL, found := os.LookupEnv(environmentVariableDatabaseURL)
+	if !found {
+		return "", "", "", fmt.Errorf("%w: %s", errEnvironmentVariableNotFound, environmentVariableDatabaseURL)
+	}
+
+	clusterAPIURL, found := os.LookupEnv(environmentVariableClusterAPIURL)
+	if !found {
+		return "", "", "", fmt.Errorf("%w: %s", errEnvironmentVariableNotFound, environmentVariableClusterAPIURL)
+	}
+
+	authorizationURL, found := os.LookupEnv(environmentVariableAuthorizationURL)
+	if !found {
+		return "", "", "", fmt.Errorf("%w: %s", errEnvironmentVariableNotFound, environmentVariableAuthorizationURL)
+	}
+
+	return databaseURL, clusterAPIURL, authorizationURL, nil
+}
+
 // function to handle defers with exit, see https://stackoverflow.com/a/27629493/553720.
 func doMain() int {
 	log := newLogger()
 
 	printVersion(log)
 
-	databaseURL, found := os.LookupEnv(environmentVariableDatabaseURL)
-	if !found {
-		log.Error(nil, "Not found:", "environment variable", environmentVariableDatabaseURL)
-		return 1
-	}
-
-	clusterAPIURL, found := os.LookupEnv(environmentVariableClusterAPIURL)
-	if !found {
-		log.Error(nil, "Not found:", "environment variable", environmentVariableClusterAPIURL)
+	databaseURL, clusterAPIURL, authorizationURL, err := readEnvironmentVariables()
+	if err != nil {
+		log.Error(err, "Failed to read environment variables")
 		return 1
 	}
 
@@ -72,7 +88,7 @@ func doMain() int {
 	}
 	defer dbConnectionPool.Close()
 
-	srv := createServer(clusterAPIURL, dbConnectionPool)
+	srv := createServer(clusterAPIURL, authorizationURL, dbConnectionPool)
 
 	// Initializing the server in a goroutine so that
 	// it won't block the graceful shutdown handling below
@@ -107,11 +123,11 @@ func doMain() int {
 	return 0
 }
 
-func createServer(clusterAPIURL string, dbConnectionPool *pgxpool.Pool) *http.Server {
+func createServer(clusterAPIURL, authorizationURL string, dbConnectionPool *pgxpool.Pool) *http.Server {
 	router := gin.Default()
 
 	router.Use(authentication.Authentication(clusterAPIURL))
-	router.GET("/managedclusters", managedclusters.ManagedClusters(dbConnectionPool))
+	router.GET("/managedclusters", managedclusters.ManagedClusters(authorizationURL, dbConnectionPool))
 
 	return &http.Server{
 		Addr:    ":8080",

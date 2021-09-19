@@ -3,7 +3,7 @@
 
 package managedclusters
 
-func filterByAuthorization(user string, groups []string) string {
+func filterByAuthorization(user string, groups []string, authorizationURL string) string {
 	// to be used later
 	_ = groups
 
