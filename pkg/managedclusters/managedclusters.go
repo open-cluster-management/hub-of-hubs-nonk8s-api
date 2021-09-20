@@ -53,7 +53,8 @@ func ManagedClusters(authorizationURL string, dbConnectionPool *pgxpool.Pool) gi
 }
 
 func sqlQuery(user string, groups []string, authorizationURL string) string {
-	return "SELECT payload FROM status.managed_clusters " + filterByAuthorization(user, groups, authorizationURL)
+	return "SELECT payload FROM status.managed_clusters " +
+		filterByAuthorization(user, groups, authorizationURL, gin.DefaultWriter)
 }
 
 func handleRowsForWatch(ginCtx *gin.Context, query string, dbConnectionPool *pgxpool.Pool) {
