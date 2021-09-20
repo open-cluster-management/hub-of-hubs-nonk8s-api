@@ -136,7 +136,7 @@ func handleRows(c *gin.Context, query string, dbConnectionPool *pgxpool.Pool) {
 		fmt.Fprintf(gin.DefaultWriter, "error in quering managed clusters: %v\n", err)
 	}
 
-	var managedClusters []*clusterv1.ManagedCluster
+	managedClusters := []*clusterv1.ManagedCluster{}
 
 	for rows.Next() {
 		managedCluster := &clusterv1.ManagedCluster{}
