@@ -23,6 +23,7 @@ const (
 	sqlFalse     = "FALSE"
 	sqlTrue      = "TRUE"
 	denyAll      = "WHERE " + sqlFalse
+	allowAll     = "WHERE " + sqlTrue
 	termsTypeRef = "ref"
 )
 
@@ -53,6 +54,10 @@ func filterByAuthorization(user string, groups []string, authorizationURL string
 		if !ok {
 			fmt.Fprintf(logWriter, "unable to convert query to an array: %v\n", rawQuery)
 			continue
+		}
+
+		if len(queries) == 1 && len(query) == 0 {
+			return allowAll
 		}
 
 		if len(query) < 1 {
