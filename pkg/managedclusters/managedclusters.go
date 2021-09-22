@@ -42,6 +42,7 @@ func ManagedClusters(authorizationURL string, dbConnectionPool *pgxpool.Pool) gi
 		fmt.Fprintf(gin.DefaultWriter, "user groups: %v\n", groups)
 
 		query := sqlQuery(user, groups, authorizationURL)
+		fmt.Fprintf(gin.DefaultWriter, "query: %v\n", query)
 
 		if _, watch := c.GetQuery("watch"); watch {
 			handleRowsForWatch(c, query, dbConnectionPool)
