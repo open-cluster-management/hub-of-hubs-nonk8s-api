@@ -23,6 +23,18 @@ Output:
  {"name": "cluster9", "vendor": "Kind", "environment": "dev"}
 ```
 
+1. Show some SQL queries on the table:
+
+```
+SELECT payload -> 'metadata' ->> 'name' FROM status.managed_clusters WHERE 
+payload -> 'metadata' -> 'labels' ->> 'environment' = 'dev';
+```
+
+```
+SELECT payload -> 'metadata' ->> 'name' FROM status.managed_clusters WHERE 
+payload -> 'metadata' -> 'labels' ->> 'environment' = 'production';
+```
+
 1. Show the current identity:
 
    ```
