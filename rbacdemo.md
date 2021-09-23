@@ -1,60 +1,61 @@
 # RBAC demo with OPA
 
 
-1. Show the clusters in the DB
+1.  Show the clusters in the DB
 
-```
-select payload -> 'metadata' -> 'labels' as labels from status.managed_clusters ORDER BY payload -> 'metadata' ->>'name';
-```
+    ```
+    select payload -> 'metadata' -> 'labels' as labels from status.managed_clusters ORDER BY payload -> 'metadata' ->>'name';
+    ```
 
-Output:
-```
-			       labels
----------------------------------------------------------------------
- {"name": "cluster0", "vendor": "Kind", "environment": "production"}
- {"name": "cluster1", "vendor": "Kind", "environment": "production"}
- {"name": "cluster2", "vendor": "Kind", "environment": "production"}
- {"name": "cluster3", "vendor": "Kind", "environment": "dev"}
- {"name": "cluster4", "vendor": "Kind"}
- {"name": "cluster5", "vendor": "Kind", "environment": "production"}
- {"name": "cluster6", "vendor": "Kind", "environment": "production"}
- {"name": "cluster7", "vendor": "Kind"}
- {"name": "cluster8", "vendor": "Kind"}
- {"name": "cluster9", "vendor": "Kind", "environment": "dev"}
-```
+    Output:
 
-1. Show some SQL queries on the table:
+    ```
+    labels
+    ---------------------------------------------------------------------
+    {"name": "cluster0", "vendor": "Kind", "environment": "production"}
+    {"name": "cluster1", "vendor": "Kind", "environment": "production"}
+    {"name": "cluster2", "vendor": "Kind", "environment": "production"}
+    {"name": "cluster3", "vendor": "Kind", "environment": "dev"}
+    {"name": "cluster4", "vendor": "Kind"}
+    {"name": "cluster5", "vendor": "Kind", "environment": "production"}
+    {"name": "cluster6", "vendor": "Kind", "environment": "production"}
+    {"name": "cluster7", "vendor": "Kind"}
+    {"name": "cluster8", "vendor": "Kind"}
+    {"name": "cluster9", "vendor": "Kind", "environment": "dev"}
+    ```
 
-```
-SELECT payload -> 'metadata' ->> 'name' FROM status.managed_clusters WHERE 
-payload -> 'metadata' -> 'labels' ->> 'environment' = 'dev';
-```
+1.  Show some SQL queries on the table:
 
-```
-SELECT payload -> 'metadata' ->> 'name' FROM status.managed_clusters WHERE 
-payload -> 'metadata' -> 'labels' ->> 'environment' = 'production';
-```
+    ```
+    SELECT payload -> 'metadata' ->> 'name' FROM status.managed_clusters WHERE
+    payload -> 'metadata' -> 'labels' ->> 'environment' = 'dev';
+    ```
 
-1. Show the current identity:
+    ```
+    SELECT payload -> 'metadata' ->> 'name' FROM status.managed_clusters WHERE
+    payload -> 'metadata' -> 'labels' ->> 'environment' = 'production';
+    ```
 
-   ```
-   curl -k https://api.veisenbe-hoh.dev10.red-chesterfield.com:6443/apis/user.openshift.io/v1/users/~ -H "Authorization: Bearer $TOKEN"
-   ```
+1.  Show the current identity:
 
-1. Start the OPA server (in the opa-demo directory):
+    ```
+    curl -k https://api.veisenbe-hoh.dev10.red-chesterfield.com:6443/apis/user.openshift.io/v1/users/~ -H "Authorization: Bearer $TOKEN"
+    ```
 
-   ```
-   opa run --server ./*.rego data.json
-   ```
+1.  Start the OPA server (in the opa-demo directory):
 
-1. Start the REST API server:
+    ```
+    opa run --server ./*.rego data.json
+    ```
 
-   ```
-   ./bin/hub-of-hubs-nonk8s-api
-   ```
+1.  Start the REST API server:
 
-1. Get the list of the managed clusters:
+    ```
+    ./bin/hub-of-hubs-nonk8s-api
+    ```
 
-   ```
-   curl -ks https://localhost:8080/managedclusters  -H "Authorization: Bearer $TOKEN" | jq .[].metadata.name | sort
-   ```
+1.  Get the list of the managed clusters:
+
+    ```
+    curl -ks https://localhost:8080/managedclusters  -H "Authorization: Bearer $TOKEN" | jq .[].metadata.name | sort
+    ```
