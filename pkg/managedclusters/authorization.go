@@ -18,11 +18,25 @@ import (
 )
 
 const (
-	sqlFalse    = "FALSE"
-	sqlTrue     = "TRUE"
-	denyAll     = "WHERE " + sqlFalse
-	allowAll    = "WHERE " + sqlTrue
-	termTypeRef = "ref"
+	sqlFalse = "FALSE"
+	sqlTrue  = "TRUE"
+
+	denyAll  = "WHERE " + sqlFalse
+	allowAll = "WHERE " + sqlTrue
+
+	termTypeRef    = "ref"
+	termTypeString = "string"
+	termTypeVar    = "var"
+
+	payloadField = "payload"
+
+	negatedAttribute = "negated"
+	termsAttribute   = "terms"
+
+	inputVariable   = "input"
+	clusterVariable = "cluster"
+
+	opaQuery = "data.rbac.clusters.allow == true"
 
 	termsArraySize                = 3 // should contain operator, first operand, second operand
 	minReferencedVariablePathSize = 2 // must contain at least 'input.cluster'
@@ -107,7 +121,7 @@ func handleExpression(rawExpression interface{}, sw io.StringWriter, logWriter i
 
 	negated := false
 
-	rawNegated, ok := expression["negated"]
+	rawNegated, ok := expression[negatedAttribute]
 	if ok {
 		convertedNegated, ok := rawNegated.(bool)
 		if ok {
@@ -115,7 +129,7 @@ func handleExpression(rawExpression interface{}, sw io.StringWriter, logWriter i
 		}
 	}
 
-	rawTerms, ok := expression["terms"]
+	rawTerms, ok := expression[termsAttribute]
 	if !ok {
 		fmt.Fprintf(logWriter, "unable to get terms from expression: %v\n", expression)
 		writeStringOrDie(sw, sqlFalse+") ")
@@ -177,17 +191,17 @@ func handleRefTerm(operandMap map[string]interface{}) (string, error) {
 			minReferencedVariablePathSize, termValueArrayLength)
 	}
 
-	firstPart, err := getTermStringValue(termValueArray[0], "var")
+	firstPart, err := getTermStringValue(termValueArray[0], termTypeVar)
 	if err != nil {
 		return "", fmt.Errorf("unable to parse operand's first part: %w", err)
 	}
 
-	secondPart, err := getTermStringValue(termValueArray[1], "string")
+	secondPart, err := getTermStringValue(termValueArray[1], termTypeString)
 	if err != nil {
 		return "", fmt.Errorf("unable to parse operand's second part: %w", err)
 	}
 
-	if firstPart != "input" && secondPart != "cluster" {
+	if firstPart != inputVariable && secondPart != clusterVariable {
 		return "", fmt.Errorf("%w: expected 'input.cluster' received '%s.%s'", errUnexpectedValue, firstPart, secondPart)
 	}
 
@@ -200,11 +214,11 @@ func handleRefTerm(operandMap map[string]interface{}) (string, error) {
 }
 
 func createPostgreSQLJSONPath(termValueArray []interface{}) (string, error) {
-	operand := "payload"
+	operand := payloadField
 	termValueArrayLength := len(termValueArray)
 
 	for index, part := range termValueArray {
-		partString, err := getTermStringValue(part, "string")
+		partString, err := getTermStringValue(part, termTypeString)
 		if err != nil {
 			return "", fmt.Errorf("unable to parse operand's part: %w", err)
 		}
@@ -283,7 +297,7 @@ func getOperand(term interface{}) (string, error) {
 	}
 
 	switch termType {
-	case "string":
+	case termTypeString:
 		operand, err := handleStringTerm(operandMap)
 		if err != nil {
 			return "", fmt.Errorf("unable to handle string term: %w", err)
@@ -404,8 +418,8 @@ func getPartialEvaluation(user string, groups []string, authorizationURL string)
 
 	compileRequest := opatypes.CompileRequestV1{
 		Input:    &input,
-		Query:    "data.rbac.clusters.allow == true",
-		Unknowns: &[]string{"input.cluster"},
+		Query:    opaQuery,
+		Unknowns: &[]string{fmt.Sprintf("%s.%s", inputVariable, clusterVariable)},
 	}
 
 	jsonCompileRequest, err := json.Marshal(compileRequest)
