@@ -17,14 +17,27 @@ import (
 	opatypes "github.com/open-policy-agent/opa/server/types"
 )
 
-var errStatusNotOK = errors.New("response status not HTTP OK")
-
 const (
-	sqlFalse     = "FALSE"
-	sqlTrue      = "TRUE"
-	denyAll      = "WHERE " + sqlFalse
-	allowAll     = "WHERE " + sqlTrue
-	termsTypeRef = "ref"
+	sqlFalse    = "FALSE"
+	sqlTrue     = "TRUE"
+	denyAll     = "WHERE " + sqlFalse
+	allowAll    = "WHERE " + sqlTrue
+	termTypeRef = "ref"
+
+	termsArraySize                = 3 // should contain operator, first operand, second operand
+	minReferencedVariablePathSize = 2 // must contain at least 'input.cluster'
+)
+
+var (
+	errStatusNotOK               = errors.New("response status not HTTP OK")
+	errUnknownOperator           = errors.New("unknown operator")
+	errUnexpectedTermType        = errors.New("unexpected term type")
+	errUnexpectedArraySize       = errors.New("unexpected array size")
+	errUnexpectedTermsNumber     = errors.New("number of terms not as expected")
+	errUnexpectedType            = errors.New("operand type not as expected")
+	errUnexpectedValue           = errors.New("value not as expected")
+	errMissingAttribute          = errors.New("missing attribute")
+	errStringsBuilderWriteString = errors.New("strings.Builder WriteString returned error")
 )
 
 func filterByAuthorization(user string, groups []string, authorizationURL string, logWriter io.Writer) string {
@@ -47,7 +60,7 @@ func filterByAuthorization(user string, groups []string, authorizationURL string
 
 	var sb strings.Builder
 
-	sb.WriteString("WHERE ")
+	writeStringOrDie(&sb, "WHERE ")
 
 	for _, rawQuery := range queries {
 		query, ok := rawQuery.([]interface{})
@@ -60,82 +73,178 @@ func filterByAuthorization(user string, groups []string, authorizationURL string
 			return allowAll
 		}
 
-		if len(query) < 1 {
-			continue
-		}
-
-		sb.WriteString("(")
-		for _, rawExpression := range query {
-			expression, ok := rawExpression.(map[string]interface{})
-			if !ok {
-				fmt.Fprintf(logWriter, "unable to convert expression to a map: %v\n", rawExpression)
-				sb.WriteString(sqlFalse + ") ")
-				continue
-			}
-
-			negated := false
-
-			rawNegated, ok := expression["negated"]
-			if ok {
-				convertedNegated, ok := rawNegated.(bool)
-				if ok {
-					negated = convertedNegated
-				}
-			}
-
-			rawTerms, ok := expression["terms"]
-			if !ok {
-				fmt.Fprintf(logWriter, "unable to get terms from expression: %v\n", expression)
-				sb.WriteString(sqlFalse + ") ")
-				continue
-			}
-
-			terms, ok := rawTerms.([]interface{})
-			if !ok {
-				fmt.Fprintf(logWriter, "unable to get terms array from expression: %v\n", expression)
-				sb.WriteString(sqlFalse + ") ")
-				continue
-			}
-
-			sb.WriteString("(")
-
-			handleTermsArray(terms, negated, &sb, logWriter)
-
-			sb.WriteString(") AND ")
-		}
-		sb.WriteString(sqlTrue) // TRUE to handle the last AND
-		sb.WriteString(") OR ")
+		handleQuery(query, &sb, logWriter)
 	}
 
-	sb.WriteString(sqlFalse) // for the last OR
+	writeStringOrDie(&sb, sqlFalse) // for the last OR
 
 	return sb.String()
 }
 
-func handleTermsArray(terms []interface{}, negated bool, sb *strings.Builder, logWriter io.Writer) {
+func handleQuery(query []interface{}, sw io.StringWriter, logWriter io.Writer) {
+	if len(query) < 1 {
+		return
+	}
+
+	writeStringOrDie(sw, "(")
+
+	for _, rawExpression := range query {
+		handleExpression(rawExpression, sw, logWriter)
+	}
+
+	writeStringOrDie(sw, sqlTrue) // TRUE to handle the last AND
+	writeStringOrDie(sw, ") OR ")
+}
+
+func handleExpression(rawExpression interface{}, sw io.StringWriter, logWriter io.Writer) {
+	expression, ok := rawExpression.(map[string]interface{})
+	if !ok {
+		fmt.Fprintf(logWriter, "unable to convert expression to a map: %v\n", rawExpression)
+		writeStringOrDie(sw, sqlFalse+") ")
+
+		return
+	}
+
+	negated := false
+
+	rawNegated, ok := expression["negated"]
+	if ok {
+		convertedNegated, ok := rawNegated.(bool)
+		if ok {
+			negated = convertedNegated
+		}
+	}
+
+	rawTerms, ok := expression["terms"]
+	if !ok {
+		fmt.Fprintf(logWriter, "unable to get terms from expression: %v\n", expression)
+		writeStringOrDie(sw, sqlFalse+") ")
+
+		return
+	}
+
+	terms, ok := rawTerms.([]interface{})
+	if !ok {
+		fmt.Fprintf(logWriter, "unable to get terms array from expression: %v\n", expression)
+		writeStringOrDie(sw, sqlFalse+") ")
+
+		return
+	}
+
+	writeStringOrDie(sw, "(")
+
+	handleTermsArray(terms, negated, sw, logWriter)
+
+	writeStringOrDie(sw, ") AND ")
+}
+
+// strings.Builder should not return errors.
+func writeStringOrDie(sw io.StringWriter, s string) {
+	if _, err := sw.WriteString(s); err != nil {
+		panic(errStringsBuilderWriteString)
+	}
+}
+
+func handleStringTerm(operandMap map[string]interface{}) (string, error) {
+	termValue, err := getTermValue(operandMap)
+	if err != nil {
+		return "", fmt.Errorf("unable to parse operand's value: %w", err)
+	}
+
+	termValueString, ok := termValue.(string)
+	if !ok {
+		return "", fmt.Errorf("%w expected string, received %T", errUnexpectedType, termValue)
+	}
+
+	return "'" + termValueString + "'", nil
+}
+
+func handleRefTerm(operandMap map[string]interface{}) (string, error) {
+	termValue, err := getTermValue(operandMap)
+	if err != nil {
+		return "", fmt.Errorf("unable to parse operand's value: %w", err)
+	}
+
+	termValueArray, ok := termValue.([]interface{})
+	if !ok {
+		return "", fmt.Errorf("%w expected array, received %T", errUnexpectedType, termValue)
+	}
+
+	termValueArrayLength := len(termValueArray)
+
+	if termValueArrayLength < minReferencedVariablePathSize {
+		return "", fmt.Errorf("%w expected %d or more, received %d", errUnexpectedTermsNumber,
+			minReferencedVariablePathSize, termValueArrayLength)
+	}
+
+	firstPart, err := getTermStringValue(termValueArray[0], "var")
+	if err != nil {
+		return "", fmt.Errorf("unable to parse operand's first part: %w", err)
+	}
+
+	secondPart, err := getTermStringValue(termValueArray[1], "string")
+	if err != nil {
+		return "", fmt.Errorf("unable to parse operand's second part: %w", err)
+	}
+
+	if firstPart != "input" && secondPart != "cluster" {
+		return "", fmt.Errorf("%w: expected 'input.cluster' received '%s.%s'", errUnexpectedValue, firstPart, secondPart)
+	}
+
+	operand, err := createPostgreSQLJSONPath(termValueArray[2:])
+	if err != nil {
+		return "", fmt.Errorf("unable to create PostgreSQL JSON Path expression: %w", err)
+	}
+
+	return operand, nil
+}
+
+func createPostgreSQLJSONPath(termValueArray []interface{}) (string, error) {
+	operand := "payload"
+	termValueArrayLength := len(termValueArray)
+
+	for index, part := range termValueArray {
+		partString, err := getTermStringValue(part, "string")
+		if err != nil {
+			return "", fmt.Errorf("unable to parse operand's part: %w", err)
+		}
+
+		pathOperator := "->"
+		if index >= termValueArrayLength-1 {
+			pathOperator = "->>"
+		}
+
+		operand = operand + " " + pathOperator + " '" + partString + "'"
+	}
+
+	return operand, nil
+}
+
+func handleTermsArray(terms []interface{}, negated bool, sw io.StringWriter, logWriter io.Writer) {
 	if negated {
-		sb.WriteString("NOT (")
+		writeStringOrDie(sw, "NOT (")
 	}
 
 	expression, err := getSQLExpression(terms)
 	if err == nil {
-		sb.WriteString(expression)
+		writeStringOrDie(sw, expression)
 	} else {
 		fmt.Fprintf(logWriter, "unable to get SQL expression: %v\n", err)
 		if negated {
-			sb.WriteString(sqlTrue)
+			writeStringOrDie(sw, sqlTrue)
 		} else {
-			sb.WriteString(sqlFalse)
+			writeStringOrDie(sw, sqlFalse)
 		}
 	}
+
 	if negated {
-		sb.WriteString(")")
+		writeStringOrDie(sw, ")")
 	}
 }
 
 func getSQLExpression(terms []interface{}) (string, error) {
-	if len(terms) != 3 {
-		return "", errors.New("number of terms is not three as expected, received " + string(len(terms)))
+	if len(terms) != termsArraySize {
+		return "", fmt.Errorf("%w: expected %d, received %d", errUnexpectedTermsNumber, termsArraySize, len(terms))
 	}
 
 	operator, err := getOperator(terms[0])
@@ -144,8 +253,9 @@ func getSQLExpression(terms []interface{}) (string, error) {
 	}
 
 	sqlOperator := "="
+
 	if operator != "eq" {
-		return "", errors.New("Unknown operator " + operator)
+		return "", fmt.Errorf("%w %s", errUnknownOperator, operator)
 	}
 
 	firstOperand, err := getOperand(terms[1])
@@ -164,7 +274,7 @@ func getSQLExpression(terms []interface{}) (string, error) {
 func getOperand(term interface{}) (string, error) {
 	operandMap, ok := term.(map[string]interface{})
 	if !ok {
-		return "", errors.New("operand term is not map")
+		return "", fmt.Errorf("%w expected map, received %T", errUnexpectedType, term)
 	}
 
 	termType, err := getTermType(operandMap)
@@ -174,74 +284,28 @@ func getOperand(term interface{}) (string, error) {
 
 	switch termType {
 	case "string":
-		termValue, err := getTermValue(operandMap)
+		operand, err := handleStringTerm(operandMap)
 		if err != nil {
-			return "", fmt.Errorf("unable to parse operand's value: %w", err)
+			return "", fmt.Errorf("unable to handle string term: %w", err)
 		}
-		termValueString, ok := termValue.(string)
-		if !ok {
-			return "", errors.New("operand's value for type string is not a string")
-		}
-		return "'" + termValueString + "'", nil
 
-	case "ref":
-		termValue, err := getTermValue(operandMap)
+		return operand, nil
+	case termTypeRef:
+		operand, err := handleRefTerm(operandMap)
 		if err != nil {
-			return "", fmt.Errorf("unable to parse operand's value: %w", err)
-		}
-
-		termValueArray, ok := termValue.([]interface{})
-		if !ok {
-			return "", errors.New("operand's value for type ref is not an array")
-		}
-
-		termValueArrayLength := len(termValueArray)
-
-		if termValueArrayLength < 2 {
-			return "", errors.New("number of ref terms is not less than two, received " +
-				string(len(termValueArray)))
-		}
-
-		firstPart, err := getTermStringValue(termValueArray[0], "var")
-		if err != nil {
-			return "", fmt.Errorf("unable to parse operand's first part: %w", err)
-		}
-
-		secondPart, err := getTermStringValue(termValueArray[1], "string")
-		if err != nil {
-			return "", fmt.Errorf("unable to parse operand's second part: %w", err)
-		}
-
-		if firstPart != "input" && secondPart != "cluster" {
-			return "", errors.New("ref term is not input.cluster, received: " + firstPart + ":" + secondPart)
-		}
-
-		operand := "payload"
-
-		for index, part := range termValueArray[2:] {
-			partString, err := getTermStringValue(part, "string")
-			if err != nil {
-				return "", fmt.Errorf("unable to parse operand's part: %w", err)
-			}
-
-			pathOperator := "->"
-			if index >= termValueArrayLength-3 {
-				pathOperator = "->>"
-			}
-
-			operand = operand + " " + pathOperator + " '" + partString + "'"
+			return "", fmt.Errorf("unable to handle ref term: %w", err)
 		}
 
 		return operand, nil
 	default:
-		return "", errors.New("unknown operand's type")
+		return "", fmt.Errorf("%w received %s", errUnexpectedTermType, termType)
 	}
 }
 
 func getOperator(term interface{}) (string, error) {
 	operatorMap, ok := term.(map[string]interface{})
 	if !ok {
-		return "", errors.New("operator term is not map")
+		return "", fmt.Errorf("%w: expected map, received %T", errUnexpectedType, term)
 	}
 
 	termType, err := getTermType(operatorMap)
@@ -249,8 +313,8 @@ func getOperator(term interface{}) (string, error) {
 		return "", fmt.Errorf("unable to parse operator's type: %w", err)
 	}
 
-	if termType != "ref" {
-		return "", errors.New("operator term's type is not ref")
+	if termType != termTypeRef {
+		return "", fmt.Errorf("%w: received %s", errUnexpectedTermType, termType)
 	}
 
 	termValue, err := getTermValue(operatorMap)
@@ -260,11 +324,11 @@ func getOperator(term interface{}) (string, error) {
 
 	termValueArray, ok := termValue.([]interface{})
 	if !ok {
-		return "", errors.New("operator term's value is not array")
+		return "", fmt.Errorf("%w: expected array, received %T", errUnexpectedType, termValue)
 	}
 
 	if len(termValueArray) != 1 {
-		return "", errors.New("operator term's value array size is not 1")
+		return "", fmt.Errorf("%w: expected 1, received %d", errUnexpectedArraySize, len(termValueArray))
 	}
 
 	termValueValueStr, err := getTermStringValue(termValueArray[0], "var")
@@ -278,12 +342,12 @@ func getOperator(term interface{}) (string, error) {
 func getTermType(term map[string]interface{}) (string, error) {
 	termType, ok := term["type"]
 	if !ok {
-		return "", errors.New("no type in term")
+		return "", fmt.Errorf("%w: type", errMissingAttribute)
 	}
 
 	termTypeString, ok := termType.(string)
 	if !ok {
-		return "", errors.New("type is not string")
+		return "", fmt.Errorf("%w: expected string, received %T", errUnexpectedType, termType)
 	}
 
 	return termTypeString, nil
@@ -292,7 +356,7 @@ func getTermType(term map[string]interface{}) (string, error) {
 func getTermStringValue(term interface{}, expectedType string) (string, error) {
 	termValueMap, ok := term.(map[string]interface{})
 	if !ok {
-		return "", errors.New("term's value is not a map")
+		return "", fmt.Errorf("%w: expected map, received %T", errUnexpectedType, term)
 	}
 
 	termValueType, err := getTermType(termValueMap)
@@ -301,7 +365,7 @@ func getTermStringValue(term interface{}, expectedType string) (string, error) {
 	}
 
 	if termValueType != expectedType {
-		return "", errors.New("wrong term value's type, expected " + expectedType + " got " + termValueType)
+		return "", fmt.Errorf("%w: expected %s, received %s", errUnexpectedTermType, expectedType, termValueType)
 	}
 
 	termValueValue, err := getTermValue(termValueMap)
@@ -311,7 +375,7 @@ func getTermStringValue(term interface{}, expectedType string) (string, error) {
 
 	termValueValueStr, ok := termValueValue.(string)
 	if !ok {
-		return "", errors.New("term's value is not a string")
+		return "", fmt.Errorf("%w: expected string, received %T", errUnexpectedType, termValueValue)
 	}
 
 	return termValueValueStr, nil
@@ -320,7 +384,7 @@ func getTermStringValue(term interface{}, expectedType string) (string, error) {
 func getTermValue(term map[string]interface{}) (interface{}, error) {
 	value, ok := term["value"]
 	if !ok {
-		return "", errors.New("no value in term")
+		return "", fmt.Errorf("%w: value", errMissingAttribute)
 	}
 
 	return value, nil
