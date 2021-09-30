@@ -42,10 +42,10 @@
     curl -k https://api.veisenbe-hoh.dev10.red-chesterfield.com:6443/apis/user.openshift.io/v1/users/~ -H "Authorization: Bearer $TOKEN"
     ```
 
-1.  Start the OPA server (in the opa-demo directory):
+1.  Start the OPA server (in the hub-of-hubs-rbac directory):
 
     ```
-    opa run --server ./*.rego data.json
+    opa run --server ./*.rego testdata/*.json
     ```
 
 1.  Start the REST API server:
