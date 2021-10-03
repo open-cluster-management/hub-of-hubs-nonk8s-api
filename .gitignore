@@ -19,3 +19,6 @@ vendor/
 
 # build binary files
 bin
+
+# certificates directory
+certs

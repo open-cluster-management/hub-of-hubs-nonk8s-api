@@ -27,13 +27,20 @@ import (
 )
 
 const (
-	environmentVariableDatabaseURL      = "DATABASE_URL"
-	environmentVariableClusterAPIURL    = "CLUSTER_API_URL"
-	environmentVariableAuthorizationURL = "AUTHORIZATION_URL"
-	secondsToFinishOnShutdown           = 5
+	environmentVariableDatabaseURL               = "DATABASE_URL"
+	environmentVariableClusterAPIURL             = "CLUSTER_API_URL"
+	environmentVariableClusterAPICABundlePath    = "CLUSTER_API_CA_BUNDLE_PATH"
+	environmentVariableAuthorizationURL          = "AUTHORIZATION_URL"
+	environmentVariableAuthorizationCABundlePath = "AUTHORIZATION_CA_BUNDLE_PATH"
+	environmentVariableKeyPath                   = "KEY_PATH"
+	environmentVariableCertificatePath           = "CERTIFICATE_PATH"
+	secondsToFinishOnShutdown                    = 5
 )
 
-var errEnvironmentVariableNotFound = errors.New("not found environment variable")
+var (
+	errEnvironmentVariableNotFound = errors.New("not found environment variable")
+	errKeyCertificateNotProvided   = errors.New("either both key and certificate must be provided, or none of them")
+)
 
 func printVersion(log logr.Logger) {
 	log.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
@@ -50,23 +57,54 @@ func newLogger() logr.Logger {
 	return zapr.NewLogger(zapLog)
 }
 
-func readEnvironmentVariables() (string, string, string, error) {
+//nolint:cyclop
+// simple function, reading environment variables one by one.
+func readEnvironmentVariables() (string, string, string, string, string, string, string, error) {
 	databaseURL, found := os.LookupEnv(environmentVariableDatabaseURL)
 	if !found {
-		return "", "", "", fmt.Errorf("%w: %s", errEnvironmentVariableNotFound, environmentVariableDatabaseURL)
+		return "", "", "", "", "", "", "", fmt.Errorf("%w: %s",
+			errEnvironmentVariableNotFound, environmentVariableDatabaseURL)
 	}
 
 	clusterAPIURL, found := os.LookupEnv(environmentVariableClusterAPIURL)
 	if !found {
-		return "", "", "", fmt.Errorf("%w: %s", errEnvironmentVariableNotFound, environmentVariableClusterAPIURL)
+		return "", "", "", "", "", "", "",
+			fmt.Errorf("%w: %s", errEnvironmentVariableNotFound, environmentVariableClusterAPIURL)
 	}
 
 	authorizationURL, found := os.LookupEnv(environmentVariableAuthorizationURL)
 	if !found {
-		return "", "", "", fmt.Errorf("%w: %s", errEnvironmentVariableNotFound, environmentVariableAuthorizationURL)
+		return "", "", "", "", "", "", "",
+			fmt.Errorf("%w: %s", errEnvironmentVariableNotFound, environmentVariableAuthorizationURL)
 	}
 
-	return databaseURL, clusterAPIURL, authorizationURL, nil
+	clusterAPICABundlePath, found := os.LookupEnv(environmentVariableClusterAPICABundlePath)
+	if !found {
+		clusterAPICABundlePath = ""
+	}
+
+	authorizationCABundlePath, found := os.LookupEnv(environmentVariableAuthorizationCABundlePath)
+	if !found {
+		authorizationCABundlePath = ""
+	}
+
+	keyPath, found := os.LookupEnv(environmentVariableKeyPath)
+	if !found {
+		keyPath = ""
+	}
+
+	certificatePath, found := os.LookupEnv(environmentVariableCertificatePath)
+	if !found {
+		certificatePath = ""
+	}
+
+	if (keyPath == "" && certificatePath != "") || (keyPath != "" && certificatePath == "") {
+		return "", "", "", "", "", "", "", fmt.Errorf("%w: %s %s", errKeyCertificateNotProvided,
+			environmentVariableKeyPath, environmentVariableCertificatePath)
+	}
+
+	return databaseURL, clusterAPIURL, clusterAPICABundlePath, authorizationURL, authorizationCABundlePath, keyPath,
+		certificatePath, nil
 }
 
 // function to handle defers with exit, see https://stackoverflow.com/a/27629493/553720.
@@ -75,7 +113,12 @@ func doMain() int {
 
 	printVersion(log)
 
-	databaseURL, clusterAPIURL, authorizationURL, err := readEnvironmentVariables()
+	databaseURL, clusterAPIURL, clusterAPICABundlePath, authorizationURL, authorizationCABundlePath, keyPath,
+		certificatePath, err := readEnvironmentVariables()
+
+	_ = clusterAPICABundlePath
+	_ = authorizationCABundlePath
+
 	if err != nil {
 		log.Error(err, "Failed to read environment variables")
 		return 1
@@ -93,8 +136,7 @@ func doMain() int {
 	// Initializing the server in a goroutine so that
 	// it won't block the graceful shutdown handling below
 	go func() {
-		if err := srv.ListenAndServeTLS("./testdata/server.pem",
-			"./testdata/server.key"); err != nil && errors.Is(err, http.ErrServerClosed) {
+		if err := srv.ListenAndServeTLS(certificatePath, keyPath); err != nil && errors.Is(err, http.ErrServerClosed) {
 			log.Error(err, "listenAndServe returned")
 		}
 	}()

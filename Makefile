@@ -63,6 +63,19 @@ lint:
 	golint ./cmd/... ./pkg/...
 	golangci-lint run ./cmd/... ./pkg/...
 
+certs:
+	@echo '*******************************************************************************'
+	@echo Generate the certificates and put them in ./certs directory
+	@echo For testing purposes only, run the following commands
+	@echo mkdir certs
+	@echo openssl genrsa -out ./certs/tls.key 2048
+	@echo "openssl req -new -x509 -key ./certs/tls.key -out ./certs/tls.crt -days 365 -subj '/O=example Inc./CN=example.com'"
+	@echo '*******************************************************************************'
+
+.PHONY: run                            ##runs the server locally
+run:	certs
+	@ KEY_PATH=./certs/tls.key CERTIFICATE_PATH=./certs/tls.crt ./bin/${COMPONENT}
+
 .PHONY: help				##show this help message
 help:
 	@echo "usage: make [target]\n"; echo "options:"; \fgrep -h "##" $(MAKEFILE_LIST) | fgrep -v fgrep | sed -e 's/\\$$//' | sed -e 's/##//' | sed 's/.PHONY:*//' | sed -e 's/^/  /'; echo "";

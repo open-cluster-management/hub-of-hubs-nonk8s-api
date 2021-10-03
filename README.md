@@ -76,9 +76,9 @@ export TOKEN=<the OC token or Service Account token from its secret>
 ```
 
 ```
-curl -k https://localhost:8080/managedclusters -w "%{http_code}\n" -H "Authorization: Bearer $TOKEN"
+curl https://example.com:8080/managedclusters -w "%{http_code}\n" -H "Authorization: Bearer $TOKEN" --cacert ./certs/tls.crt --resolve example.com:8080:127.0.0.1
 ```
 
 ```
-curl -ks https://localhost:8080/managedclusters  -H "Authorization: Bearer $TOKEN" | jq .[].metadata.name
+curl -s https://example.com:8080/managedclusters  -H "Authorization: Bearer $TOKEN" | jq .[].metadata.name --cacert ./certs/tls.crt --resolve example.com:8080:127.0.0.1
 ```
