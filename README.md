@@ -70,19 +70,39 @@ make build-images
 1.  Deploy the operator:
 
     ```
-    COMPONENT=$(basename $(pwd)) envsubst < deploy/operator.yaml.template | kubectl apply --kubeconfig $TOP_HUB_CONFIG -n open-cluster-management -f -
+    COMPONENT=$(basename $(pwd)) IMAGE_TAG=latest envsubst < deploy/operator.yaml.template | kubectl apply --kubeconfig $TOP_HUB_CONFIG -n open-cluster-management -f -
     ```
 
-## Test
+### Working with Kubernetes deployment
+
+Show log:
+
+```
+kubectl logs -l name=$(basename $(pwd)) -n open-cluster-management
+```
+
+Execute commands on the container:
+
+```
+kubectl exec -it $(kubectl get pod -l name=$(basename $(pwd)) -o jsonpath='{.items..metadata.name}' -n open-cluster-management) \
+-n open-cluster-management -- bash
+```
+
+## Test (run the commands in this directory)
+
+```
+Add `example.com` to /etc/hosts as local host.
+```
 
 ```
 export TOKEN=<the OC token or Service Account token from its secret>
 ```
 
 ```
-curl https://example.com:8080/managedclusters -w "%{http_code}\n" -H "Authorization: Bearer $TOKEN" --cacert ./certs/tls.crt --resolve example.com:8080:127.0.0.1
+curl https://example.com:8080/managedclusters -w "%{http_code}\n" -H "Authorization: Bearer $TOKEN" --cacert ./certs/tls.crt
 ```
 
 ```
-curl -s https://example.com:8080/managedclusters  -H "Authorization: Bearer $TOKEN" | jq .[].metadata.name --cacert ./certs/tls.crt --resolve example.com:8080:127.0.0.1
+curl -s https://example.com:8080/managedclusters  -H "Authorization: Bearer $TOKEN" --cacert ./certs/tls.crt |
+     jq .[].metadata.name
 ```
