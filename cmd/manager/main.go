@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
@@ -37,10 +38,7 @@ const (
 	secondsToFinishOnShutdown                    = 5
 )
 
-var (
-	errEnvironmentVariableNotFound = errors.New("not found environment variable")
-	errKeyCertificateNotProvided   = errors.New("either both key and certificate must be provided, or none of them")
-)
+var errEnvironmentVariableNotFound = errors.New("not found environment variable")
 
 func printVersion(log logr.Logger) {
 	log.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
@@ -57,8 +55,6 @@ func newLogger() logr.Logger {
 	return zapr.NewLogger(zapLog)
 }
 
-//nolint:cyclop
-// simple function, reading environment variables one by one.
 func readEnvironmentVariables() (string, string, string, string, string, string, string, error) {
 	databaseURL, found := os.LookupEnv(environmentVariableDatabaseURL)
 	if !found {
@@ -90,17 +86,14 @@ func readEnvironmentVariables() (string, string, string, string, string, string,
 
 	keyPath, found := os.LookupEnv(environmentVariableKeyPath)
 	if !found {
-		keyPath = ""
+		return "", "", "", "", "", "", "",
+			fmt.Errorf("%w: %s", errEnvironmentVariableNotFound, environmentVariableKeyPath)
 	}
 
 	certificatePath, found := os.LookupEnv(environmentVariableCertificatePath)
 	if !found {
-		certificatePath = ""
-	}
-
-	if (keyPath == "" && certificatePath != "") || (keyPath != "" && certificatePath == "") {
-		return "", "", "", "", "", "", "", fmt.Errorf("%w: %s %s", errKeyCertificateNotProvided,
-			environmentVariableKeyPath, environmentVariableCertificatePath)
+		return "", "", "", "", "", "", "",
+			fmt.Errorf("%w: %s", errEnvironmentVariableNotFound, environmentVariableCertificatePath)
 	}
 
 	return databaseURL, clusterAPIURL, clusterAPICABundlePath, authorizationURL, authorizationCABundlePath, keyPath,
@@ -110,18 +103,31 @@ func readEnvironmentVariables() (string, string, string, string, string, string,
 // function to handle defers with exit, see https://stackoverflow.com/a/27629493/553720.
 func doMain() int {
 	log := newLogger()
-
 	printVersion(log)
 
 	databaseURL, clusterAPIURL, clusterAPICABundlePath, authorizationURL, authorizationCABundlePath, keyPath,
 		certificatePath, err := readEnvironmentVariables()
-
-	_ = clusterAPICABundlePath
-	_ = authorizationCABundlePath
-
 	if err != nil {
 		log.Error(err, "Failed to read environment variables")
 		return 1
+	}
+
+	var clusterAPICABundle []byte
+	if clusterAPICABundlePath != "" {
+		clusterAPICABundle, err = ioutil.ReadFile(clusterAPICABundlePath)
+		if err != nil {
+			log.Error(err, "Failed to read clusterAPICABundle")
+			return 1
+		}
+	}
+
+	var authorizationCABundle []byte
+	if authorizationCABundlePath != "" {
+		authorizationCABundle, err = ioutil.ReadFile(authorizationCABundlePath)
+		if err != nil {
+			log.Error(err, "Failed to read authorizationCABundle")
+			return 1
+		}
 	}
 
 	dbConnectionPool, err := pgxpool.Connect(context.TODO(), databaseURL)
@@ -131,28 +137,21 @@ func doMain() int {
 	}
 	defer dbConnectionPool.Close()
 
-	srv := createServer(clusterAPIURL, authorizationURL, dbConnectionPool)
+	srv := createServer(clusterAPIURL, clusterAPICABundle, authorizationURL, authorizationCABundle, dbConnectionPool)
 
-	// Initializing the server in a goroutine so that
-	// it won't block the graceful shutdown handling below
+	// Initializing the server in a goroutine so that it won't block the graceful shutdown handling below
 	go func() {
 		if err := srv.ListenAndServeTLS(certificatePath, keyPath); err != nil && errors.Is(err, http.ErrServerClosed) {
 			log.Error(err, "listenAndServe returned")
 		}
 	}()
 
-	// Wait for interrupt signal to gracefully shutdown the server with
-	// a timeout of 5 seconds.
 	quit := make(chan os.Signal, 1)
-	// kill (no param) default send syscall.SIGTERM
-	// kill -2 is syscall.SIGINT
-	// kill -9 is syscall.SIGKILL but can't be catch, so don't need add it
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Info("shutting down server")
 
-	// The context is used to inform the server it has 5 seconds to finish
-	// the request it is currently handling
+	// The context is used to inform the server it has 5 seconds to finish the request it is currently handling
 	ctx, cancel := context.WithTimeout(context.Background(), secondsToFinishOnShutdown*time.Second)
 	defer cancel()
 
@@ -165,11 +164,13 @@ func doMain() int {
 	return 0
 }
 
-func createServer(clusterAPIURL, authorizationURL string, dbConnectionPool *pgxpool.Pool) *http.Server {
+func createServer(clusterAPIURL string, clusterAPICABundle []byte, authorizationURL string,
+	authorizationCABundle []byte, dbConnectionPool *pgxpool.Pool) *http.Server {
 	router := gin.Default()
 
-	router.Use(authentication.Authentication(clusterAPIURL))
-	router.GET("/managedclusters", managedclusters.ManagedClusters(authorizationURL, dbConnectionPool))
+	router.Use(authentication.Authentication(clusterAPIURL, clusterAPICABundle))
+	router.GET("/managedclusters", managedclusters.ManagedClusters(authorizationURL,
+		authorizationCABundle, dbConnectionPool))
 
 	return &http.Server{
 		Addr:    ":8080",

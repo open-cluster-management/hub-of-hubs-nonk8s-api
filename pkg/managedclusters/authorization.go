@@ -6,6 +6,8 @@ package managedclusters
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,10 +54,12 @@ var (
 	errUnexpectedValue           = errors.New("value not as expected")
 	errMissingAttribute          = errors.New("missing attribute")
 	errStringsBuilderWriteString = errors.New("strings.Builder WriteString returned error")
+	errUnableToAppendCABundle    = errors.New("unable to append CA bundle")
 )
 
-func filterByAuthorization(user string, groups []string, authorizationURL string, logWriter io.Writer) string {
-	compileResponse, err := getPartialEvaluation(user, groups, authorizationURL)
+func filterByAuthorization(user string, groups []string, authorizationURL string, authorizationCABundle []byte,
+	logWriter io.Writer) string {
+	compileResponse, err := getPartialEvaluation(user, groups, authorizationURL, authorizationCABundle)
 	if err != nil {
 		fmt.Fprintf(logWriter, "unable to get partial evaluation response %v\n", err)
 		return denyAll
@@ -404,11 +408,32 @@ func getTermValue(term map[string]interface{}) (interface{}, error) {
 	return value, nil
 }
 
-func getPartialEvaluation(user string, groups []string, authorizationURL string) (*opatypes.CompileResponseV1, error) {
-	_ = groups // to be implemented later
+func createClient(authorizationCABundle []byte) (*http.Client, error) {
+	tlsConfig := &tls.Config{
+		//nolint:gosec
+		InsecureSkipVerify: true,
+	}
 
-	tr := &http.Transport{}
-	client := &http.Client{Transport: tr}
+	if authorizationCABundle != nil {
+		rootCAs := x509.NewCertPool()
+		if ok := rootCAs.AppendCertsFromPEM(authorizationCABundle); !ok {
+			return nil, fmt.Errorf("unable to append authorization CA Bundle: %w", errUnableToAppendCABundle)
+		}
+
+		tlsConfig = &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			RootCAs:    rootCAs,
+		}
+	}
+
+	tr := &http.Transport{TLSClientConfig: tlsConfig}
+
+	return &http.Client{Transport: tr}, nil
+}
+
+func getPartialEvaluation(user string, groups []string, authorizationURL string,
+	authorizationCABundle []byte) (*opatypes.CompileResponseV1, error) {
+	_ = groups // to be implemented later
 
 	// the following two lines are required due to the fact that CompileRequestV1 uses
 	// pointer to interface
@@ -425,6 +450,11 @@ func getPartialEvaluation(user string, groups []string, authorizationURL string)
 	jsonCompileRequest, err := json.Marshal(compileRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to marshal json: %w", err)
+	}
+
+	client, err := createClient(authorizationCABundle)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create client: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(context.TODO(), "POST", fmt.Sprintf("%s/v1/compile",

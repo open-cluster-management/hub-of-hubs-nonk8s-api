@@ -6,7 +6,9 @@ package authentication
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -22,11 +24,13 @@ const (
 	GroupsKey = "groups"
 )
 
+var errUnableToAppendCABundle = errors.New("unable to append CA Bundle")
+
 // Authentication middleware.
-func Authentication(clusterAPIURL string) gin.HandlerFunc {
+func Authentication(clusterAPIURL string, clusterAPICABundle []byte) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authorizationHeader := c.GetHeader("Authorization")
-		if !setAuthenticatedUser(c, authorizationHeader, clusterAPIURL) {
+		if !setAuthenticatedUser(c, authorizationHeader, clusterAPIURL, clusterAPICABundle) {
 			c.Header("WWW-Authenticate", "")
 			c.AbortWithStatus(http.StatusUnauthorized)
 
@@ -37,14 +41,36 @@ func Authentication(clusterAPIURL string) gin.HandlerFunc {
 	}
 }
 
-func setAuthenticatedUser(c *gin.Context, authorizationHeader string, clusterAPIURL string) bool {
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			//nolint:gosec
-			InsecureSkipVerify: true,
-		},
+func createClient(clusterAPICABundle []byte) (*http.Client, error) {
+	tlsConfig := &tls.Config{
+		//nolint:gosec
+		InsecureSkipVerify: true,
 	}
-	client := &http.Client{Transport: tr}
+
+	if clusterAPICABundle != nil {
+		rootCAs := x509.NewCertPool()
+		if ok := rootCAs.AppendCertsFromPEM(clusterAPICABundle); !ok {
+			fmt.Fprintf(gin.DefaultWriter, "unable to append cluster API CA Bundle")
+			return nil, fmt.Errorf("unable to append cluster API CA Bundle %w", errUnableToAppendCABundle)
+		}
+
+		tlsConfig = &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			RootCAs:    rootCAs,
+		}
+	}
+
+	tr := &http.Transport{TLSClientConfig: tlsConfig}
+
+	return &http.Client{Transport: tr}, nil
+}
+
+func setAuthenticatedUser(c *gin.Context, authorizationHeader string, clusterAPIURL string,
+	clusterAPICABundle []byte) bool {
+	client, err := createClient(clusterAPICABundle)
+	if err != nil {
+		fmt.Fprintf(gin.DefaultWriter, "unable to create client: %v\n", err)
+	}
 
 	req, err := http.NewRequestWithContext(context.TODO(), "GET", fmt.Sprintf("%s/apis/user.openshift.io/v1/users/~",
 		clusterAPIURL), nil)

@@ -22,7 +22,8 @@ import (
 const syncIntervalInSeconds = 4
 
 // ManagedClusters middleware.
-func ManagedClusters(authorizationURL string, dbConnectionPool *pgxpool.Pool) gin.HandlerFunc {
+func ManagedClusters(authorizationURL string, authorizationCABundle []byte,
+	dbConnectionPool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, ok := c.MustGet(authentication.UserKey).(string)
 		if !ok {
@@ -41,7 +42,7 @@ func ManagedClusters(authorizationURL string, dbConnectionPool *pgxpool.Pool) gi
 		fmt.Fprintf(gin.DefaultWriter, "got authenticated user: %v\n", user)
 		fmt.Fprintf(gin.DefaultWriter, "user groups: %v\n", groups)
 
-		query := sqlQuery(user, groups, authorizationURL)
+		query := sqlQuery(user, groups, authorizationURL, authorizationCABundle)
 		fmt.Fprintf(gin.DefaultWriter, "query: %v\n", query)
 
 		if _, watch := c.GetQuery("watch"); watch {
@@ -53,9 +54,9 @@ func ManagedClusters(authorizationURL string, dbConnectionPool *pgxpool.Pool) gi
 	}
 }
 
-func sqlQuery(user string, groups []string, authorizationURL string) string {
+func sqlQuery(user string, groups []string, authorizationURL string, authorizationCABundle []byte) string {
 	return "SELECT payload FROM status.managed_clusters " +
-		filterByAuthorization(user, groups, authorizationURL, gin.DefaultWriter)
+		filterByAuthorization(user, groups, authorizationURL, authorizationCABundle, gin.DefaultWriter)
 }
 
 func handleRowsForWatch(ginCtx *gin.Context, query string, dbConnectionPool *pgxpool.Pool) {

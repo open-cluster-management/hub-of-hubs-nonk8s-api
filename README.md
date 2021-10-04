@@ -24,9 +24,13 @@ make build
 
 Set the following environment variables:
 
-* DATABASE_URL
-* CLUSTER_API_URL
-* AUTHORIZATION_URL
+* `DATABASE_URL` - the URL of the database server
+* `CLUSTER_API_URL` - the URL of the Kubernetes API server
+* `CLUSTER_API_CA_BUNDLE_PATH` - the CA bundle for the Kubernetes API server. If not provided, verification of the server certificates is skipped.
+* `AUTHORIZATION_URL` - the URL of the authorization server
+* `AUTHORIZATION_CA_BUNDLE_PATH` - the CA bundle for the authorization server. If not provided, verification of the server certificates is skipped.
+* `KEY_PATH` - the path to the file that contains the private key for this server's TLS.
+* `CERTIFICATE_PATH` - the path to the file that contains the certificate for this server's TLS.
 
 Set the `DATABASE_URL` according to the PostgreSQL URL format: `postgres://YourUserName:YourURLEscapedPassword@YourHostname:5432/YourDatabaseName?sslmode=verify-full&pool_max_conns=50`.
 
