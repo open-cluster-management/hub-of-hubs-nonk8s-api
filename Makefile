@@ -74,7 +74,7 @@ certs:
 
 .PHONY: run                            ##runs the server locally
 run:	certs
-	@ KEY_PATH=./certs/tls.key CERTIFICATE_PATH=./certs/tls.crt ./bin/${COMPONENT}
+	@  GODEBUG=x509ignoreCN=0 KEY_PATH=./certs/tls.key CERTIFICATE_PATH=./certs/tls.crt AUTHORIZATION_CA_BUNDLE_PATH=../hub-of-hubs-rbac/certs/tls.crt ./bin/${COMPONENT}
 
 .PHONY: help				##show this help message
 help:
