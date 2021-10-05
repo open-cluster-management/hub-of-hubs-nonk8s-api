@@ -4,6 +4,22 @@ kind: ServiceAccount
 metadata:
   name: ${COMPONENT}
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${COMPONENT}
+  labels:
+    app: ${COMPONENT}
+    service: ${COMPONENT}
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: ${COMPONENT}-certs
+spec:
+  ports:
+  - port: 8080
+    name: http
+  selector:
+    name: ${COMPONENT}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -31,16 +47,28 @@ spec:
                   key: url
             - name: CLUSTER_API_URL
               value: https://kubernetes.default.svc:443
+            - name: CLUSTER_API_CA_BUNDLE_PATH
+              value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
             - name: AUTHORIZATION_URL
               value: https://hub-of-hubs-rbac.open-cluster-management.svc:8181
             - name: AUTHORIZATION_CA_BUNDLE_PATH
-              value: /ca/service-ca.crt
+              value: /hub-of-hubs-rbac-ca/service-ca.crt
+            - name: KEY_PATH
+              value: /certs/tls.key
+            - name: CERTIFICATE_PATH
+              value: /certs/tls.crt
           volumeMounts:
             - readOnly: true
-              mountPath: /ca
-              name: ca
+              mountPath: /hub-of-hubs-rbac-ca
+              name: hub-of-hubs-rbac-ca
+            - readOnly: true
+              mountPath: /certs
+              name: certs
       volumes:
-        - name: ca
+        - name: hub-of-hubs-rbac-ca
           configMap:
             name: hub-of-hubs-rbac-ca-bundle
+        - name: certs
+          secret:
+            secretName: ${COMPONENT}-certs
 ---
