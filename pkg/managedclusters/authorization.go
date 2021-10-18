@@ -58,8 +58,8 @@ var (
 )
 
 func filterByAuthorization(user string, groups []string, authorizationURL string, authorizationCABundle []byte,
-	logWriter io.Writer) string {
-	compileResponse, err := getPartialEvaluation(user, groups, authorizationURL, authorizationCABundle)
+	certificate tls.Certificate, logWriter io.Writer) string {
+	compileResponse, err := getPartialEvaluation(user, groups, authorizationURL, authorizationCABundle, certificate)
 	if err != nil {
 		fmt.Fprintf(logWriter, "unable to get partial evaluation response %v\n", err)
 		return denyAll
@@ -408,7 +408,7 @@ func getTermValue(term map[string]interface{}) (interface{}, error) {
 	return value, nil
 }
 
-func createClient(authorizationCABundle []byte) (*http.Client, error) {
+func createClient(authorizationCABundle []byte, certificate tls.Certificate) (*http.Client, error) {
 	tlsConfig := &tls.Config{
 		//nolint:gosec
 		InsecureSkipVerify: true,
@@ -421,8 +421,9 @@ func createClient(authorizationCABundle []byte) (*http.Client, error) {
 		}
 
 		tlsConfig = &tls.Config{
-			MinVersion: tls.VersionTLS12,
-			RootCAs:    rootCAs,
+			Certificates: []tls.Certificate{certificate},
+			MinVersion:   tls.VersionTLS12,
+			RootCAs:      rootCAs,
 		}
 	}
 
@@ -432,7 +433,7 @@ func createClient(authorizationCABundle []byte) (*http.Client, error) {
 }
 
 func getPartialEvaluation(user string, groups []string, authorizationURL string,
-	authorizationCABundle []byte) (*opatypes.CompileResponseV1, error) {
+	authorizationCABundle []byte, certificate tls.Certificate) (*opatypes.CompileResponseV1, error) {
 	_ = groups // to be implemented later
 
 	// the following two lines are required due to the fact that CompileRequestV1 uses
@@ -452,7 +453,7 @@ func getPartialEvaluation(user string, groups []string, authorizationURL string,
 		return nil, fmt.Errorf("unable to marshal json: %w", err)
 	}
 
-	client, err := createClient(authorizationCABundle)
+	client, err := createClient(authorizationCABundle, certificate)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create client: %w", err)
 	}

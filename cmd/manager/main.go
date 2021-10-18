@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -38,7 +39,10 @@ const (
 	secondsToFinishOnShutdown                    = 5
 )
 
-var errEnvironmentVariableNotFound = errors.New("not found environment variable")
+var (
+	errEnvironmentVariableNotFound = errors.New("not found environment variable")
+	errFailedToLoadCertificate     = errors.New("failed to load certificate/key")
+)
 
 func printVersion(log logr.Logger) {
 	log.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
@@ -100,6 +104,39 @@ func readEnvironmentVariables() (string, string, string, string, string, string,
 		certificatePath, nil
 }
 
+func readCertificates(clusterAPICABundlePath, authorizationCABundlePath, certificatePath,
+	keyPath string) ([]byte, []byte, tls.Certificate, error) {
+	var (
+		clusterAPICABundle    []byte
+		authorizationCABundle []byte
+		certificate           tls.Certificate
+	)
+
+	if clusterAPICABundlePath != "" {
+		clusterAPICABundle, err := ioutil.ReadFile(clusterAPICABundlePath)
+		if err != nil {
+			return clusterAPICABundle, authorizationCABundle, certificate,
+				fmt.Errorf("%w: %s", errFailedToLoadCertificate, clusterAPICABundlePath)
+		}
+	}
+
+	if authorizationCABundlePath != "" {
+		authorizationCABundle, err := ioutil.ReadFile(authorizationCABundlePath)
+		if err != nil {
+			return clusterAPICABundle, authorizationCABundle, certificate,
+				fmt.Errorf("%w: %s", errFailedToLoadCertificate, authorizationCABundle)
+		}
+	}
+
+	certificate, err := tls.LoadX509KeyPair(certificatePath, keyPath)
+	if err != nil {
+		return clusterAPICABundle, authorizationCABundle, certificate,
+			fmt.Errorf("%w: %s/%s", errFailedToLoadCertificate, certificatePath, keyPath)
+	}
+
+	return clusterAPICABundle, authorizationCABundle, certificate, nil
+}
+
 // function to handle defers with exit, see https://stackoverflow.com/a/27629493/553720.
 func doMain() int {
 	log := newLogger()
@@ -112,24 +149,6 @@ func doMain() int {
 		return 1
 	}
 
-	var clusterAPICABundle []byte
-	if clusterAPICABundlePath != "" {
-		clusterAPICABundle, err = ioutil.ReadFile(clusterAPICABundlePath)
-		if err != nil {
-			log.Error(err, "Failed to read clusterAPICABundle")
-			return 1
-		}
-	}
-
-	var authorizationCABundle []byte
-	if authorizationCABundlePath != "" {
-		authorizationCABundle, err = ioutil.ReadFile(authorizationCABundlePath)
-		if err != nil {
-			log.Error(err, "Failed to read authorizationCABundle")
-			return 1
-		}
-	}
-
 	dbConnectionPool, err := pgxpool.Connect(context.TODO(), databaseURL)
 	if err != nil {
 		log.Error(err, "Failed to connect to the database")
@@ -137,7 +156,15 @@ func doMain() int {
 	}
 	defer dbConnectionPool.Close()
 
-	srv := createServer(clusterAPIURL, clusterAPICABundle, authorizationURL, authorizationCABundle, dbConnectionPool)
+	clusterAPICABundle, authorizationCABundle, certificate, err :=
+		readCertificates(clusterAPICABundlePath, authorizationCABundlePath, certificatePath, keyPath)
+	if err != nil {
+		log.Error(err, "Failed to read certificates")
+		return 1
+	}
+
+	srv := createServer(clusterAPIURL, clusterAPICABundle, authorizationURL, authorizationCABundle, dbConnectionPool,
+		certificate)
 
 	// Initializing the server in a goroutine so that it won't block the graceful shutdown handling below
 	go func() {
@@ -165,12 +192,12 @@ func doMain() int {
 }
 
 func createServer(clusterAPIURL string, clusterAPICABundle []byte, authorizationURL string,
-	authorizationCABundle []byte, dbConnectionPool *pgxpool.Pool) *http.Server {
+	authorizationCABundle []byte, dbConnectionPool *pgxpool.Pool, certificate tls.Certificate) *http.Server {
 	router := gin.Default()
 
 	router.Use(authentication.Authentication(clusterAPIURL, clusterAPICABundle))
 	router.GET("/managedclusters", managedclusters.ManagedClusters(authorizationURL,
-		authorizationCABundle, dbConnectionPool))
+		authorizationCABundle, dbConnectionPool, certificate))
 
 	return &http.Server{
 		Addr:    ":8080",
