@@ -5,7 +5,6 @@ package managedclusters
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,7 +23,7 @@ const syncIntervalInSeconds = 4
 
 // ManagedClusters middleware.
 func ManagedClusters(authorizationURL string, authorizationCABundle []byte,
-	dbConnectionPool *pgxpool.Pool, certificate tls.Certificate) gin.HandlerFunc {
+	dbConnectionPool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, ok := c.MustGet(authentication.UserKey).(string)
 		if !ok {
@@ -43,7 +42,7 @@ func ManagedClusters(authorizationURL string, authorizationCABundle []byte,
 		fmt.Fprintf(gin.DefaultWriter, "got authenticated user: %v\n", user)
 		fmt.Fprintf(gin.DefaultWriter, "user groups: %v\n", groups)
 
-		query := sqlQuery(user, groups, authorizationURL, authorizationCABundle, certificate)
+		query := sqlQuery(user, groups, authorizationURL, authorizationCABundle)
 		fmt.Fprintf(gin.DefaultWriter, "query: %v\n", query)
 
 		if _, watch := c.GetQuery("watch"); watch {
@@ -55,10 +54,9 @@ func ManagedClusters(authorizationURL string, authorizationCABundle []byte,
 	}
 }
 
-func sqlQuery(user string, groups []string, authorizationURL string, authorizationCABundle []byte,
-	certificate tls.Certificate) string {
+func sqlQuery(user string, groups []string, authorizationURL string, authorizationCABundle []byte) string {
 	return "SELECT payload FROM status.managed_clusters " +
-		filterByAuthorization(user, groups, authorizationURL, authorizationCABundle, certificate, gin.DefaultWriter)
+		filterByAuthorization(user, groups, authorizationURL, authorizationCABundle, gin.DefaultWriter)
 }
 
 func handleRowsForWatch(ginCtx *gin.Context, query string, dbConnectionPool *pgxpool.Pool) {
