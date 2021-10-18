@@ -20,6 +20,15 @@ spec:
   selector:
     name: ${COMPONENT}
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ${COMPONENT}-ca-bundle
+  annotations:
+    service.beta.openshift.io/inject-cabundle: "true"
+  labels:
+    service: ${COMPONENT}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
