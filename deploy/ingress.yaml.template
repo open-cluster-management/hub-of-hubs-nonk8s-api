@@ -1,0 +1,24 @@
+# Copyright (c) 2020 Red Hat, Inc.
+# Copyright Contributors to the Open Cluster Management project
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    ingress.open-cluster-management.io/auth-type: access-token
+    ingress.open-cluster-management.io/secure-backends: "true"
+    kubernetes.io/ingress.class: ingress-open-cluster-management
+  name: ${COMPONENT}
+  labels:
+    app: ${COMPONENT}
+spec:
+  rules:
+  - http:
+      paths:
+      - backend:
+          service:
+            name: ${COMPONENT}
+            port:
+              number: 8080
+        path: /multicloud/hub-of-hubs-nonk8s-api
+        pathType: ImplementationSpecific
