@@ -73,6 +73,12 @@ make build-images
     COMPONENT=$(basename $(pwd)) IMAGE_TAG=latest envsubst < deploy/operator.yaml.template | kubectl apply --kubeconfig $TOP_HUB_CONFIG -n open-cluster-management -f -
     ```
 
+1.  Deploy Ingress:
+
+    ```
+    COMPONENT=$(basename $(pwd)) envsubst < deploy/ingress.yaml.template | kubectl apply --kubeconfig $TOP_HUB_CONFIG -n open-cluster-management -f -
+    ```
+
 ### Working with Kubernetes deployment
 
 Show log:
