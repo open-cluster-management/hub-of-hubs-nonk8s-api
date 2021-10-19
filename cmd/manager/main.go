@@ -36,6 +36,7 @@ const (
 	environmentVariableAuthorizationCABundlePath = "AUTHORIZATION_CA_BUNDLE_PATH"
 	environmentVariableKeyPath                   = "KEY_PATH"
 	environmentVariableCertificatePath           = "CERTIFICATE_PATH"
+	environmentVariableBasePath                  = "BASE_PATH"
 	secondsToFinishOnShutdown                    = 5
 )
 
@@ -59,22 +60,22 @@ func newLogger() logr.Logger {
 	return zapr.NewLogger(zapLog)
 }
 
-func readEnvironmentVariables() (string, string, string, string, string, string, string, error) {
+func readEnvironmentVariables() (string, string, string, string, string, string, string, string, error) {
 	databaseURL, found := os.LookupEnv(environmentVariableDatabaseURL)
 	if !found {
-		return "", "", "", "", "", "", "", fmt.Errorf("%w: %s",
+		return "", "", "", "", "", "", "", "", fmt.Errorf("%w: %s",
 			errEnvironmentVariableNotFound, environmentVariableDatabaseURL)
 	}
 
 	clusterAPIURL, found := os.LookupEnv(environmentVariableClusterAPIURL)
 	if !found {
-		return "", "", "", "", "", "", "",
+		return "", "", "", "", "", "", "", "",
 			fmt.Errorf("%w: %s", errEnvironmentVariableNotFound, environmentVariableClusterAPIURL)
 	}
 
 	authorizationURL, found := os.LookupEnv(environmentVariableAuthorizationURL)
 	if !found {
-		return "", "", "", "", "", "", "",
+		return "", "", "", "", "", "", "", "",
 			fmt.Errorf("%w: %s", errEnvironmentVariableNotFound, environmentVariableAuthorizationURL)
 	}
 
@@ -90,18 +91,23 @@ func readEnvironmentVariables() (string, string, string, string, string, string,
 
 	keyPath, found := os.LookupEnv(environmentVariableKeyPath)
 	if !found {
-		return "", "", "", "", "", "", "",
+		return "", "", "", "", "", "", "", "",
 			fmt.Errorf("%w: %s", errEnvironmentVariableNotFound, environmentVariableKeyPath)
 	}
 
 	certificatePath, found := os.LookupEnv(environmentVariableCertificatePath)
 	if !found {
-		return "", "", "", "", "", "", "",
+		return "", "", "", "", "", "", "", "",
 			fmt.Errorf("%w: %s", errEnvironmentVariableNotFound, environmentVariableCertificatePath)
 	}
 
+	basePath, found := os.LookupEnv(environmentVariableBasePath)
+	if !found {
+		basePath = ""
+	}
+
 	return databaseURL, clusterAPIURL, clusterAPICABundlePath, authorizationURL, authorizationCABundlePath, keyPath,
-		certificatePath, nil
+		certificatePath, basePath, nil
 }
 
 func readCertificates(clusterAPICABundlePath, authorizationCABundlePath, certificatePath,
@@ -143,7 +149,7 @@ func doMain() int {
 	printVersion(log)
 
 	databaseURL, clusterAPIURL, clusterAPICABundlePath, authorizationURL, authorizationCABundlePath, keyPath,
-		certificatePath, err := readEnvironmentVariables()
+		certificatePath, basePath, err := readEnvironmentVariables()
 	if err != nil {
 		log.Error(err, "Failed to read environment variables")
 		return 1
@@ -163,7 +169,8 @@ func doMain() int {
 		return 1
 	}
 
-	srv := createServer(clusterAPIURL, clusterAPICABundle, authorizationURL, authorizationCABundle, dbConnectionPool)
+	srv := createServer(clusterAPIURL, clusterAPICABundle, authorizationURL,
+		authorizationCABundle, dbConnectionPool, basePath)
 
 	// Initializing the server in a goroutine so that it won't block the graceful shutdown handling below
 	go func() {
@@ -191,11 +198,13 @@ func doMain() int {
 }
 
 func createServer(clusterAPIURL string, clusterAPICABundle []byte, authorizationURL string,
-	authorizationCABundle []byte, dbConnectionPool *pgxpool.Pool) *http.Server {
+	authorizationCABundle []byte, dbConnectionPool *pgxpool.Pool, basePath string) *http.Server {
 	router := gin.Default()
 
 	router.Use(authentication.Authentication(clusterAPIURL, clusterAPICABundle))
-	router.GET("/managedclusters", managedclusters.ManagedClusters(authorizationURL,
+
+	routerGroup := router.Group(basePath)
+	routerGroup.GET("/managedclusters", managedclusters.ManagedClusters(authorizationURL,
 		authorizationCABundle, dbConnectionPool))
 
 	return &http.Server{
