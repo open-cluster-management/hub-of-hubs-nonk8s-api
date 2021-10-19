@@ -79,6 +79,12 @@ make build-images
     COMPONENT=$(basename $(pwd)) envsubst < deploy/ingress.yaml.template | kubectl apply --kubeconfig $TOP_HUB_CONFIG -n open-cluster-management -f -
     ```
 
+### Test the ingress
+
+```
+curl -ks  https://multicloud-console.apps.<the hub URL>/multicloud/hub-of-hubs-nonk8s-api/managedclusters  -H "Authorization: Bearer $TOKEN" | jq .[].metadata.name
+```
+
 ### Working with Kubernetes deployment
 
 Show log:
