@@ -66,6 +66,8 @@ spec:
               value: /certs/tls.key
             - name: CERTIFICATE_PATH
               value: /certs/tls.crt
+            - name: BASE_PATH
+              value: /multicloud/hub-of-hubs-nonk8s-api
           volumeMounts:
             - readOnly: true
               mountPath: /hub-of-hubs-rbac-ca
