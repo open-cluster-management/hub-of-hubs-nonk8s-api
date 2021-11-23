@@ -1,6 +1,6 @@
 [comment]: # ( Copyright Contributors to the Open Cluster Management project )
 
-# Hub-of-Hubs Spec Sync
+# Hub-of-Hubs Nonk8s API
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/open-cluster-management/hub-of-hubs-spec-sync)](https://goreportcard.com/report/github.com/open-cluster-management/hub-of-hubs-nonk8s-api)
 [![License](https://img.shields.io/github/license/open-cluster-management/hub-of-hubs-nonk8s-api)](/LICENSE)
