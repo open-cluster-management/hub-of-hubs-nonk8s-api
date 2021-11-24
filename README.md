@@ -81,6 +81,8 @@ make build-images
 
 ### Test the ingress
 
+Note that the port is 443 (the standard HTTPS port).
+
 ```
 curl -ks  https://multicloud-console.apps.<the hub URL>/multicloud/hub-of-hubs-nonk8s-api/managedclusters  -H "Authorization: Bearer $TOKEN" | jq .[].metadata.name
 ```
