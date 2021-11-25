@@ -39,7 +39,7 @@
 1.  Show the current identity:
 
     ```
-    curl -k https://api.veisenbe-hoh.dev10.red-chesterfield.com:6443/apis/user.openshift.io/v1/users/~ -H "Authorization: Bearer $TOKEN"
+    curl -k https://api.$CLUSTER_URL:6443/apis/user.openshift.io/v1/users/~ -H "Authorization: Bearer $TOKEN"
     ```
 
 1.  Start the OPA server (in the hub-of-hubs-rbac directory):
