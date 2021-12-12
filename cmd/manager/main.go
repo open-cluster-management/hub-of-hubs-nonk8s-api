@@ -21,6 +21,7 @@ import (
 	"github.com/go-logr/zapr"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/open-cluster-management/hub-of-hubs-nonk8s-api/pkg/authentication"
+	"github.com/open-cluster-management/hub-of-hubs-nonk8s-api/pkg/localpolicies"
 	"github.com/open-cluster-management/hub-of-hubs-nonk8s-api/pkg/managedclusters"
 	"go.uber.org/zap"
 
@@ -205,6 +206,10 @@ func createServer(clusterAPIURL string, clusterAPICABundle []byte, authorization
 
 	routerGroup := router.Group(basePath)
 	routerGroup.GET("/managedclusters", managedclusters.ManagedClusters(authorizationURL,
+		authorizationCABundle, dbConnectionPool))
+
+	localRouterGroup := routerGroup.Group("/local")
+	localRouterGroup.GET("/policies", localpolicies.LocalPolicies(authorizationURL,
 		authorizationCABundle, dbConnectionPool))
 
 	return &http.Server{
