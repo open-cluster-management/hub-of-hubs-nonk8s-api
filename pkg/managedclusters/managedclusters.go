@@ -26,16 +26,16 @@ const syncIntervalInSeconds = 4
 // ManagedClusters middleware.
 func ManagedClusters(authorizationURL string, authorizationCABundle []byte,
 	dbConnectionPool *pgxpool.Pool) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		user, ok := c.MustGet(authentication.UserKey).(string)
-		if !ok {
+	return func(ginCtx *gin.Context) {
+		user, isCorrectType := ginCtx.MustGet(authentication.UserKey).(string)
+		if !isCorrectType {
 			fmt.Fprintf(gin.DefaultWriter, "unable to get user from context")
 
 			user = "Unknown"
 		}
 
-		groups, ok := c.MustGet(authentication.GroupsKey).([]string)
-		if !ok {
+		groups, isCorrectType := ginCtx.MustGet(authentication.GroupsKey).([]string)
+		if !isCorrectType {
 			fmt.Fprintf(gin.DefaultWriter, "unable to get groups from context")
 
 			groups = []string{}
@@ -47,12 +47,12 @@ func ManagedClusters(authorizationURL string, authorizationCABundle []byte,
 		query := sqlQuery(user, groups, authorizationURL, authorizationCABundle)
 		fmt.Fprintf(gin.DefaultWriter, "query: %v\n", query)
 
-		if _, watch := c.GetQuery("watch"); watch {
-			handleRowsForWatch(c, query, dbConnectionPool)
+		if _, watch := ginCtx.GetQuery("watch"); watch {
+			handleRowsForWatch(ginCtx, query, dbConnectionPool)
 			return
 		}
 
-		handleRows(c, query, dbConnectionPool)
+		handleRows(ginCtx, query, dbConnectionPool)
 	}
 }
 
@@ -62,11 +62,11 @@ func sqlQuery(user string, groups []string, authorizationURL string, authorizati
 }
 
 func handleRowsForWatch(ginCtx *gin.Context, query string, dbConnectionPool *pgxpool.Pool) {
-	w := ginCtx.Writer
-	header := w.Header()
+	writer := ginCtx.Writer
+	header := writer.Header()
 	header.Set("Transfer-Encoding", "chunked")
 	header.Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	writer.WriteHeader(http.StatusOK)
 
 	ticker := time.NewTicker(syncIntervalInSeconds * time.Second)
 
@@ -80,7 +80,7 @@ func handleRowsForWatch(ginCtx *gin.Context, query string, dbConnectionPool *pgx
 
 	for {
 		select {
-		case <-w.CloseNotify():
+		case <-writer.CloseNotify():
 			ticker.Stop()
 			cancelContext()
 
@@ -93,12 +93,12 @@ func handleRowsForWatch(ginCtx *gin.Context, query string, dbConnectionPool *pgx
 				return
 			}
 
-			doHandleRowsForWatch(ctx, w, query, dbConnectionPool, previouslyAddedManagedClusterNames)
+			doHandleRowsForWatch(ctx, writer, query, dbConnectionPool, previouslyAddedManagedClusterNames)
 		}
 	}
 }
 
-func doHandleRowsForWatch(ctx context.Context, w io.Writer, query string, dbConnectionPool *pgxpool.Pool,
+func doHandleRowsForWatch(ctx context.Context, writer io.Writer, query string, dbConnectionPool *pgxpool.Pool,
 	previouslyAddedManagedClusterNames set.Set) {
 	rows, err := dbConnectionPool.Query(ctx, query)
 	if err != nil {
@@ -116,7 +116,7 @@ func doHandleRowsForWatch(ctx context.Context, w io.Writer, query string, dbConn
 		}
 
 		addedManagedClusterNames.Add(managedCluster.GetName())
-		sendWatchEvent(&metav1.WatchEvent{Type: "ADDED", Object: runtime.RawExtension{Object: managedCluster}}, w)
+		sendWatchEvent(&metav1.WatchEvent{Type: "ADDED", Object: runtime.RawExtension{Object: managedCluster}}, writer)
 	}
 
 	managedClusterNamesToDelete := previouslyAddedManagedClusterNames.Difference(addedManagedClusterNames)
@@ -137,7 +137,8 @@ func doHandleRowsForWatch(ctx context.Context, w io.Writer, query string, dbConn
 			Kind:    "ManagedCluster",
 		})
 		managedClusterToDelete.SetName(managedClusterNameToDeleteAsString)
-		sendWatchEvent(&metav1.WatchEvent{Type: "DELETED", Object: runtime.RawExtension{Object: managedClusterToDelete}}, w)
+		sendWatchEvent(&metav1.WatchEvent{Type: "DELETED", Object: runtime.RawExtension{Object: managedClusterToDelete}},
+			writer)
 	}
 
 	managedClusterNamesToAdd := addedManagedClusterNames.Difference(previouslyAddedManagedClusterNames)
@@ -152,24 +153,24 @@ func doHandleRowsForWatch(ctx context.Context, w io.Writer, query string, dbConn
 		previouslyAddedManagedClusterNames.Add(managedClusterNameToAddAsString)
 	}
 
-	w.(http.Flusher).Flush()
+	writer.(http.Flusher).Flush()
 }
 
-func sendWatchEvent(watchEvent *metav1.WatchEvent, w io.Writer) {
+func sendWatchEvent(watchEvent *metav1.WatchEvent, writer io.Writer) {
 	json, err := json.Marshal(watchEvent)
 	if err != nil {
 		fmt.Fprintf(gin.DefaultWriter, "error in json marshalling: %v\n", err)
 		return
 	}
 
-	_, err = w.Write(json)
+	_, err = writer.Write(json)
 
 	if err != nil {
 		fmt.Fprintf(gin.DefaultWriter, "error in writing response: %v\n", err)
 		return
 	}
 
-	_, err = w.Write([]byte("\n"))
+	_, err = writer.Write([]byte("\n"))
 
 	if err != nil {
 		fmt.Fprintf(gin.DefaultWriter, "error in writing response: %v\n", err)
@@ -177,10 +178,10 @@ func sendWatchEvent(watchEvent *metav1.WatchEvent, w io.Writer) {
 	}
 }
 
-func handleRows(c *gin.Context, query string, dbConnectionPool *pgxpool.Pool) {
+func handleRows(ginCtx *gin.Context, query string, dbConnectionPool *pgxpool.Pool) {
 	rows, err := dbConnectionPool.Query(context.TODO(), query)
 	if err != nil {
-		c.String(http.StatusInternalServerError, "internal error")
+		ginCtx.String(http.StatusInternalServerError, "internal error")
 		fmt.Fprintf(gin.DefaultWriter, "error in quering managed clusters: %v\n", err)
 	}
 
@@ -198,5 +199,5 @@ func handleRows(c *gin.Context, query string, dbConnectionPool *pgxpool.Pool) {
 		managedClusters = append(managedClusters, managedCluster)
 	}
 
-	c.JSON(http.StatusOK, managedClusters)
+	ginCtx.JSON(http.StatusOK, managedClusters)
 }

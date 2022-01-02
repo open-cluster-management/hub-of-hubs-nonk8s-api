@@ -65,14 +65,14 @@ func filterByAuthorization(user string, groups []string, authorizationURL string
 		return denyAll
 	}
 
-	resultMap, ok := (*compileResponse.Result).(map[string]interface{})
-	if !ok {
+	resultMap, isTypeCorrect := (*compileResponse.Result).(map[string]interface{})
+	if !isTypeCorrect {
 		fmt.Fprintf(logWriter, "unable to convert result to map\n")
 		return denyAll
 	}
 
-	queries, ok := resultMap["queries"].([]interface{})
-	if !ok || len(queries) < 1 {
+	queries, isTypeCorrect := resultMap["queries"].([]interface{})
+	if !isTypeCorrect || len(queries) < 1 {
 		return denyAll
 	}
 
@@ -81,8 +81,8 @@ func filterByAuthorization(user string, groups []string, authorizationURL string
 	writeStringOrDie(&sb, "WHERE ")
 
 	for _, rawQuery := range queries {
-		query, ok := rawQuery.([]interface{})
-		if !ok {
+		query, isTypeCorrect := rawQuery.([]interface{})
+		if !isTypeCorrect {
 			fmt.Fprintf(logWriter, "unable to convert query to an array: %v\n", rawQuery)
 			continue
 		}
@@ -99,61 +99,61 @@ func filterByAuthorization(user string, groups []string, authorizationURL string
 	return sb.String()
 }
 
-func handleQuery(query []interface{}, sw io.StringWriter, logWriter io.Writer) {
+func handleQuery(query []interface{}, stringWriter io.StringWriter, logWriter io.Writer) {
 	if len(query) < 1 {
 		return
 	}
 
-	writeStringOrDie(sw, "(")
+	writeStringOrDie(stringWriter, "(")
 
 	for _, rawExpression := range query {
-		handleExpression(rawExpression, sw, logWriter)
+		handleExpression(rawExpression, stringWriter, logWriter)
 	}
 
-	writeStringOrDie(sw, sqlTrue) // TRUE to handle the last AND
-	writeStringOrDie(sw, ") OR ")
+	writeStringOrDie(stringWriter, sqlTrue) // TRUE to handle the last AND
+	writeStringOrDie(stringWriter, ") OR ")
 }
 
-func handleExpression(rawExpression interface{}, sw io.StringWriter, logWriter io.Writer) {
-	expression, ok := rawExpression.(map[string]interface{})
-	if !ok {
+func handleExpression(rawExpression interface{}, stringWriter io.StringWriter, logWriter io.Writer) {
+	expression, isTypeCorrect := rawExpression.(map[string]interface{})
+	if !isTypeCorrect {
 		fmt.Fprintf(logWriter, "unable to convert expression to a map: %v\n", rawExpression)
-		writeStringOrDie(sw, sqlFalse+") ")
+		writeStringOrDie(stringWriter, sqlFalse+") ")
 
 		return
 	}
 
 	negated := false
 
-	rawNegated, ok := expression[negatedAttribute]
-	if ok {
-		convertedNegated, ok := rawNegated.(bool)
-		if ok {
+	rawNegated, isTypeCorrect := expression[negatedAttribute]
+	if isTypeCorrect {
+		convertedNegated, isTypeCorrect := rawNegated.(bool)
+		if isTypeCorrect {
 			negated = convertedNegated
 		}
 	}
 
-	rawTerms, ok := expression[termsAttribute]
-	if !ok {
+	rawTerms, isTypeCorrect := expression[termsAttribute]
+	if !isTypeCorrect {
 		fmt.Fprintf(logWriter, "unable to get terms from expression: %v\n", expression)
-		writeStringOrDie(sw, sqlFalse+") ")
+		writeStringOrDie(stringWriter, sqlFalse+") ")
 
 		return
 	}
 
-	terms, ok := rawTerms.([]interface{})
-	if !ok {
+	terms, isTypeCorrect := rawTerms.([]interface{})
+	if !isTypeCorrect {
 		fmt.Fprintf(logWriter, "unable to get terms array from expression: %v\n", expression)
-		writeStringOrDie(sw, sqlFalse+") ")
+		writeStringOrDie(stringWriter, sqlFalse+") ")
 
 		return
 	}
 
-	writeStringOrDie(sw, "(")
+	writeStringOrDie(stringWriter, "(")
 
-	handleTermsArray(terms, negated, sw, logWriter)
+	handleTermsArray(terms, negated, stringWriter, logWriter)
 
-	writeStringOrDie(sw, ") AND ")
+	writeStringOrDie(stringWriter, ") AND ")
 }
 
 // strings.Builder should not return errors.
@@ -238,25 +238,25 @@ func createPostgreSQLJSONPath(termValueArray []interface{}) (string, error) {
 	return operand, nil
 }
 
-func handleTermsArray(terms []interface{}, negated bool, sw io.StringWriter, logWriter io.Writer) {
+func handleTermsArray(terms []interface{}, negated bool, stringWriter io.StringWriter, logWriter io.Writer) {
 	if negated {
-		writeStringOrDie(sw, "NOT (")
+		writeStringOrDie(stringWriter, "NOT (")
 	}
 
 	expression, err := getSQLExpression(terms)
 	if err == nil {
-		writeStringOrDie(sw, expression)
+		writeStringOrDie(stringWriter, expression)
 	} else {
 		fmt.Fprintf(logWriter, "unable to get SQL expression: %v\n", err)
 		if negated {
-			writeStringOrDie(sw, sqlTrue)
+			writeStringOrDie(stringWriter, sqlTrue)
 		} else {
-			writeStringOrDie(sw, sqlFalse)
+			writeStringOrDie(stringWriter, sqlFalse)
 		}
 	}
 
 	if negated {
-		writeStringOrDie(sw, ")")
+		writeStringOrDie(stringWriter, ")")
 	}
 }
 
@@ -321,8 +321,8 @@ func getOperand(term interface{}) (string, error) {
 }
 
 func getOperator(term interface{}) (string, error) {
-	operatorMap, ok := term.(map[string]interface{})
-	if !ok {
+	operatorMap, isTypeCorrect := term.(map[string]interface{})
+	if !isTypeCorrect {
 		return "", fmt.Errorf("%w: expected map, received %T", errUnexpectedType, term)
 	}
 
@@ -340,8 +340,8 @@ func getOperator(term interface{}) (string, error) {
 		return "", fmt.Errorf("unable to parse operator's value: %w", err)
 	}
 
-	termValueArray, ok := termValue.([]interface{})
-	if !ok {
+	termValueArray, isTypeCorrect := termValue.([]interface{})
+	if !isTypeCorrect {
 		return "", fmt.Errorf("%w: expected array, received %T", errUnexpectedType, termValue)
 	}
 
@@ -358,13 +358,13 @@ func getOperator(term interface{}) (string, error) {
 }
 
 func getTermType(term map[string]interface{}) (string, error) {
-	termType, ok := term["type"]
-	if !ok {
+	termType, isTypeCorrect := term["type"]
+	if !isTypeCorrect {
 		return "", fmt.Errorf("%w: type", errMissingAttribute)
 	}
 
-	termTypeString, ok := termType.(string)
-	if !ok {
+	termTypeString, isTypeCorrect := termType.(string)
+	if !isTypeCorrect {
 		return "", fmt.Errorf("%w: expected string, received %T", errUnexpectedType, termType)
 	}
 
@@ -372,8 +372,8 @@ func getTermType(term map[string]interface{}) (string, error) {
 }
 
 func getTermStringValue(term interface{}, expectedType string) (string, error) {
-	termValueMap, ok := term.(map[string]interface{})
-	if !ok {
+	termValueMap, isTypeCorrect := term.(map[string]interface{})
+	if !isTypeCorrect {
 		return "", fmt.Errorf("%w: expected map, received %T", errUnexpectedType, term)
 	}
 
@@ -391,8 +391,8 @@ func getTermStringValue(term interface{}, expectedType string) (string, error) {
 		return "", fmt.Errorf("unable to parse term's value: %w", err)
 	}
 
-	termValueValueStr, ok := termValueValue.(string)
-	if !ok {
+	termValueValueStr, isTypeCorrect := termValueValue.(string)
+	if !isTypeCorrect {
 		return "", fmt.Errorf("%w: expected string, received %T", errUnexpectedType, termValueValue)
 	}
 

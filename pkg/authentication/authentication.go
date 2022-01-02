@@ -28,16 +28,16 @@ var errUnableToAppendCABundle = errors.New("unable to append CA Bundle")
 
 // Authentication middleware.
 func Authentication(clusterAPIURL string, clusterAPICABundle []byte) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		authorizationHeader := c.GetHeader("Authorization")
-		if !setAuthenticatedUser(c, authorizationHeader, clusterAPIURL, clusterAPICABundle) {
-			c.Header("WWW-Authenticate", "")
-			c.AbortWithStatus(http.StatusUnauthorized)
+	return func(ginCtx *gin.Context) {
+		authorizationHeader := ginCtx.GetHeader("Authorization")
+		if !setAuthenticatedUser(ginCtx, authorizationHeader, clusterAPIURL, clusterAPICABundle) {
+			ginCtx.Header("WWW-Authenticate", "")
+			ginCtx.AbortWithStatus(http.StatusUnauthorized)
 
 			return
 		}
 
-		c.Next()
+		ginCtx.Next()
 	}
 }
 
@@ -65,7 +65,7 @@ func createClient(clusterAPICABundle []byte) (*http.Client, error) {
 	return &http.Client{Transport: tr}, nil
 }
 
-func setAuthenticatedUser(c *gin.Context, authorizationHeader string, clusterAPIURL string,
+func setAuthenticatedUser(ginCtx *gin.Context, authorizationHeader string, clusterAPIURL string,
 	clusterAPICABundle []byte) bool {
 	client, err := createClient(clusterAPICABundle)
 	if err != nil {
@@ -105,8 +105,8 @@ func setAuthenticatedUser(c *gin.Context, authorizationHeader string, clusterAPI
 		return false
 	}
 
-	c.Set(UserKey, user.Name)
-	c.Set(GroupsKey, user.Groups)
+	ginCtx.Set(UserKey, user.Name)
+	ginCtx.Set(GroupsKey, user.Groups)
 
 	fmt.Fprintf(gin.DefaultWriter, "got authenticated user: %v\n", user.Name)
 	fmt.Fprintf(gin.DefaultWriter, "user groups: %v\n", user.Groups)
