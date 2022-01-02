@@ -162,8 +162,8 @@ func doMain() int {
 	}
 	defer dbConnectionPool.Close()
 
-	clusterAPICABundle, authorizationCABundle, _, err :=
-		readCertificates(clusterAPICABundlePath, authorizationCABundlePath, certificatePath, keyPath)
+	clusterAPICABundle, authorizationCABundle, _, err := readCertificates(clusterAPICABundlePath,
+		authorizationCABundlePath, certificatePath, keyPath)
 	if err != nil {
 		log.Error(err, "Failed to read certificates")
 		return 1
