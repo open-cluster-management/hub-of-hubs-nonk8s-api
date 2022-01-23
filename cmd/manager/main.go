@@ -20,8 +20,8 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/open-cluster-management/hub-of-hubs-nonk8s-api/pkg/authentication"
-	"github.com/open-cluster-management/hub-of-hubs-nonk8s-api/pkg/managedclusters"
+	"github.com/stolostron/hub-of-hubs-nonk8s-api/pkg/authentication"
+	"github.com/stolostron/hub-of-hubs-nonk8s-api/pkg/managedclusters"
 	"go.uber.org/zap"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)

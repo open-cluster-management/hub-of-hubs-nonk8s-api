@@ -1,4 +1,4 @@
-module github.com/open-cluster-management/hub-of-hubs-nonk8s-api
+module github.com/stolostron/hub-of-hubs-nonk8s-api
 
 go 1.17
 
