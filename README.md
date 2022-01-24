@@ -3,7 +3,8 @@
 # Hub-of-Hubs Nonk8s API
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/stolostron/hub-of-hubs-spec-sync)](https://goreportcard.com/report/github.com/stolostron/hub-of-hubs-nonk8s-api)
-[![License](https://img.shields.io/github/license/open-cluster-management/hub-of-hubs-nonk8s-api)](/LICENSE)
+[![Go Reference](https://pkg.go.dev/badge/github.com/stolostron/hub-of-hubs-nonk8s-api.svg)](https://pkg.go.dev/github.com/stolostron/hub-of-hubs-nonk8s-api)
+[![License](https://img.shields.io/github/license/stolostron/hub-of-hubs-nonk8s-api)](/LICENSE)
 
 The REST API component of [Hub-of-Hubs](https://github.com/stolostron/hub-of-hubs).
 
