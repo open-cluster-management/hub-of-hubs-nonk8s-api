@@ -13,8 +13,9 @@ The REST API component of [Hub-of-Hubs](https://github.com/stolostron/hub-of-hub
 While a Kubernetes [Extension API server](https://kubernetes.io/docs/tasks/extend-kubernetes/setup-extension-api-server/) can be used to provide access 
 to the items in the Hub-of-Hubs scalabale database, such a server would have the following drawbacks:
 
-1. The API schema and URL parameters must confirm to the API schema of Kubernetes. In particular, no sort parameter could be passed for list operations (see [list options](https://github.com/kubernetes/apimachinery/blob/3d7c63b4de4fdee1917284129969901d4777facc/pkg/apis/meta/internalversion/types.go#L29))
-2. Such API server must be REST (and not GRPC, for example).
+1. The API schema and URL parameters must confirm to the API schema of Kubernetes. In particular, no sort parameter could be passed for list operations (see [list options](https://github.com/kubernetes/apimachinery/blob/3d7c63b4de4fdee1917284129969901d4777facc/pkg/apis/meta/internalversion/types.go#L29), 
+[parsed](https://github.com/kubernetes/apiserver/blob/cd64b6709ecf2514c0fc15965b3e34a4d7062308/pkg/endpoints/request/requestinfo.go#L212) by the API server code).
+1. Such API server must be REST (and not GRPC, for example).
 
 ## Environment variables
 
