@@ -62,6 +62,14 @@ func Patch(authorizationURL string, authorizationCABundle []byte,
 			return
 		}
 
+		// from https://datatracker.ietf.org/doc/html/rfc6902:
+		// Evaluation of a JSON Patch document begins against a target JSON
+		// document.  Operations are applied sequentially in the order they
+		// appear in the array.  Each operation in the sequence is applied to
+		// the target document; the resulting document becomes the target of the
+		// next operation.  Evaluation continues until all operations are
+		// successfully applied or until an error condition is encountered.
+
 		for index, p := range patches {
 			fmt.Fprintf(gin.DefaultWriter, "patch[%d] = {op: %s, path: %s, value = %s}\n",
 				index, p.Op, p.Path, p.Value)
