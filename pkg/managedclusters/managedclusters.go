@@ -23,8 +23,54 @@ import (
 
 const syncIntervalInSeconds = 4
 
-// ManagedClusters middleware.
-func ManagedClusters(authorizationURL string, authorizationCABundle []byte,
+type patch struct {
+	Op    string `json:"op" binding:"required"`
+	Path  string `json:"path" binding:"required"`
+	Value string `json:"value"`
+}
+
+// Patch middleware.
+func Patch(authorizationURL string, authorizationCABundle []byte,
+	dbConnectionPool *pgxpool.Pool) gin.HandlerFunc {
+	return func(ginCtx *gin.Context) {
+		user, isCorrectType := ginCtx.MustGet(authentication.UserKey).(string)
+		if !isCorrectType {
+			fmt.Fprintf(gin.DefaultWriter, "unable to get user from context")
+
+			user = "Unknown"
+		}
+
+		groups, isCorrectType := ginCtx.MustGet(authentication.GroupsKey).([]string)
+		if !isCorrectType {
+			fmt.Fprintf(gin.DefaultWriter, "unable to get groups from context")
+
+			groups = []string{}
+		}
+
+		cluster := ginCtx.Param("cluster")
+
+		fmt.Fprintf(gin.DefaultWriter, "patch for cluster: %s\n", cluster)
+
+		fmt.Fprintf(gin.DefaultWriter, "got authenticated user: %v\n", user)
+		fmt.Fprintf(gin.DefaultWriter, "user groups: %v\n", groups)
+
+		var patches []patch
+
+		err := ginCtx.BindJSON(&patches)
+		if err != nil {
+			fmt.Fprintf(gin.DefaultWriter, "failed to bind: %s\n", err.Error())
+			return
+		}
+
+		for index, p := range patches {
+			fmt.Fprintf(gin.DefaultWriter, "patch[%d] = {op: %s, path: %s, value = %s}\n",
+				index, p.Op, p.Path, p.Value)
+		}
+	}
+}
+
+// Get middleware.
+func Get(authorizationURL string, authorizationCABundle []byte,
 	dbConnectionPool *pgxpool.Pool) gin.HandlerFunc {
 	return func(ginCtx *gin.Context) {
 		user, isCorrectType := ginCtx.MustGet(authentication.UserKey).(string)
