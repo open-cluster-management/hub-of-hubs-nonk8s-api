@@ -97,14 +97,15 @@ func getLabels(ginCtx *gin.Context, patches []patch) (map[string]string, map[str
 	// successfully applied or until an error condition is encountered.
 
 	for _, aPatch := range patches {
-		label := strings.TrimPrefix(aPatch.Path, "/metadata/labels/")
+		rawLabel := strings.TrimPrefix(aPatch.Path, "/metadata/labels/")
 
-		if label == aPatch.Path {
+		if rawLabel == aPatch.Path {
 			ginCtx.JSON(http.StatusNotImplemented, gin.H{"status": onlyPatchOfLabelsIsImplemented})
 
 			return nil, nil, errOnlyPatchOfLabelsIsImplemented
 		}
 
+		label := strings.Replace(rawLabel, "~", "/", 1)
 		if aPatch.Op == "add" {
 			delete(labelsToRemove, label)
 
