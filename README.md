@@ -135,7 +135,8 @@ curl -s https://example.com:8080/managedclusters  -H "Authorization: Bearer $TOK
 ```
 ## Exercise the deployed API
 
-1.  Define `TOKEN` and `CLUSTER_URL` environment variables
+1.  Define `TOKEN` and `CLUSTER_URL` environment variables. Get `TOKEN` from `copy login command` in UI. `CLUSTER_URL` is the part of URL of the ACM console,
+    after `multicloud-console.apps`.
 
 1.  Show the current identity:
 
