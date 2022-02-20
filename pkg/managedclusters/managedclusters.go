@@ -6,9 +6,11 @@ package managedclusters
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	set "github.com/deckarep/golang-set"
@@ -21,7 +23,16 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-const syncIntervalInSeconds = 4
+const (
+	syncIntervalInSeconds          = 4
+	onlyPatchOfLabelsIsImplemented = "only patch of labels is currently implemented"
+	onlyAddOrRemoveAreImplemented  = "only add or remove operations are currently implemented"
+)
+
+var (
+	errOnlyPatchOfLabelsIsImplemented = errors.New(onlyPatchOfLabelsIsImplemented)
+	errOnlyAddOrRemoveAreImplemented  = errors.New(onlyAddOrRemoveAreImplemented)
+)
 
 type patch struct {
 	Op    string `json:"op" binding:"required"`
@@ -62,19 +73,60 @@ func Patch(authorizationURL string, authorizationCABundle []byte,
 			return
 		}
 
-		// from https://datatracker.ietf.org/doc/html/rfc6902:
-		// Evaluation of a JSON Patch document begins against a target JSON
-		// document.  Operations are applied sequentially in the order they
-		// appear in the array.  Each operation in the sequence is applied to
-		// the target document; the resulting document becomes the target of the
-		// next operation.  Evaluation continues until all operations are
-		// successfully applied or until an error condition is encountered.
-
-		for index, p := range patches {
-			fmt.Fprintf(gin.DefaultWriter, "patch[%d] = {op: %s, path: %s, value = %s}\n",
-				index, p.Op, p.Path, p.Value)
+		labelsToAdd, labelsToRemove, err := getLabels(ginCtx, patches)
+		if err != nil {
+			fmt.Fprintf(gin.DefaultWriter, "failed to get labels: %s\n", err.Error())
+			return
 		}
+
+		fmt.Fprintf(gin.DefaultWriter, "labels to add: %v\n", labelsToAdd)
+		fmt.Fprintf(gin.DefaultWriter, "labels to remove: %v\n", labelsToRemove)
 	}
+}
+
+func getLabels(ginCtx *gin.Context, patches []patch) (map[string]string, map[string]struct{}, error) {
+	labelsToAdd := make(map[string]string)
+	labelsToRemove := make(map[string]struct{})
+
+	// from https://datatracker.ietf.org/doc/html/rfc6902:
+	// Evaluation of a JSON Patch document begins against a target JSON
+	// document.  Operations are applied sequentially in the order they
+	// appear in the array.  Each operation in the sequence is applied to
+	// the target document; the resulting document becomes the target of the
+	// next operation.  Evaluation continues until all operations are
+	// successfully applied or until an error condition is encountered.
+
+	for _, aPatch := range patches {
+		label := strings.TrimPrefix(aPatch.Path, "/metadata/labels/")
+
+		if label == aPatch.Path {
+			ginCtx.JSON(http.StatusNotImplemented, gin.H{"status": onlyPatchOfLabelsIsImplemented})
+
+			return nil, nil, errOnlyPatchOfLabelsIsImplemented
+		}
+
+		if aPatch.Op == "add" {
+			delete(labelsToRemove, label)
+
+			labelsToAdd[label] = aPatch.Value
+
+			continue
+		}
+
+		if aPatch.Op == "remove" {
+			delete(labelsToAdd, label)
+
+			labelsToRemove[label] = struct{}{}
+
+			continue
+		}
+
+		ginCtx.JSON(http.StatusNotImplemented, gin.H{"status": onlyAddOrRemoveAreImplemented})
+
+		return nil, nil, errOnlyAddOrRemoveAreImplemented
+	}
+
+	return labelsToAdd, labelsToRemove, nil
 }
 
 // Get middleware.
