@@ -23,8 +23,8 @@ const (
 	sqlFalse = "FALSE"
 	sqlTrue  = "TRUE"
 
-	denyAll  = "WHERE " + sqlFalse
-	allowAll = "WHERE " + sqlTrue
+	denyAll  = sqlFalse
+	allowAll = sqlTrue
 
 	termTypeRef    = "ref"
 	termTypeString = "string"
@@ -77,8 +77,6 @@ func filterByAuthorization(user string, groups []string, authorizationURL string
 	}
 
 	var sb strings.Builder
-
-	writeStringOrDie(&sb, "WHERE ")
 
 	for _, rawQuery := range queries {
 		query, isTypeCorrect := rawQuery.([]interface{})

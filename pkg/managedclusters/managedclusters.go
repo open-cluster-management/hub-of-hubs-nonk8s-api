@@ -164,7 +164,7 @@ func Get(authorizationURL string, authorizationCABundle []byte,
 }
 
 func sqlQuery(user string, groups []string, authorizationURL string, authorizationCABundle []byte) string {
-	return "SELECT payload FROM status.managed_clusters " +
+	return "SELECT payload FROM status.managed_clusters WHERE TRUE AND " +
 		filterByAuthorization(user, groups, authorizationURL, authorizationCABundle, gin.DefaultWriter)
 }
 
