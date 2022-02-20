@@ -146,7 +146,7 @@ curl -s https://example.com:8080/managedclusters  -H "Authorization: Bearer $TOK
 1.  Show the managed clusters in Non-Kubernetes REST API:
 
     ```
-    curl -ks  https://multicloud-console.apps.$CLUSTER_URL/multicloud/hub-of-hubs-nonk8s-api/managedclusters  -H "Authorization: Bearer $TOKEN" |  jq .[].metadata.name | sort
+    curl -ks https://multicloud-console.apps.$CLUSTER_URL/multicloud/hub-of-hubs-nonk8s-api/managedclusters -H "Authorization: Bearer $TOKEN" | jq .[].metadata.name | sort
     ```
 
 1.  Add a label `a=b`:
