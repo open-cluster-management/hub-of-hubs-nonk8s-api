@@ -15,6 +15,9 @@ to the items in the Hub-of-Hubs scalabale database, such a server would have the
 
 1. The API schema and URL parameters must confirm to the API schema of Kubernetes. In particular, no sort parameter could be passed for list operations (see [list options](https://github.com/kubernetes/apimachinery/blob/3d7c63b4de4fdee1917284129969901d4777facc/pkg/apis/meta/internalversion/types.go#L29), 
 [parsed](https://github.com/kubernetes/apiserver/blob/cd64b6709ecf2514c0fc15965b3e34a4d7062308/pkg/endpoints/request/requestinfo.go#L212) by the API server code).
+1. No advanced query capabilities (only label selectors of Kubernetes)
+1. Watch from a revision version - hard to implmenent revision version mechanism for an SQL database (no build-in concept of revision versions in SQL)
+1. The clients of a Kubernetes API server may try to cache all the resources, and can break as a result of caching a large number of resources.
 1. Such API server must be REST (and not GRPC, for example).
 
 ## Environment variables
