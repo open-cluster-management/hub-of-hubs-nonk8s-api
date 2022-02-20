@@ -135,8 +135,10 @@ curl -s https://example.com:8080/managedclusters  -H "Authorization: Bearer $TOK
 ```
 ## Exercise the deployed API
 
-1.  Define `TOKEN` and `CLUSTER_URL` environment variables. Get `TOKEN` from `copy login command` in UI. `CLUSTER_URL` is the part of URL of the ACM console,
-    after `multicloud-console.apps`.
+1.  Define `TOKEN` and `CLUSTER_URL` environment variables. Get `TOKEN` from `copy login command` in the OpenShift console. 
+    Alternatively, if you want to run commands as a service account, check the secret of the service account which appears in 
+    the `secrets` field of the secret account, for example `<sa name>-token-XXXX`. Then run `kubectl get secret <secret name> -o jsonpath="{.data.token}" | base64 -d` to get the token from the secret and to decrypt it from base 64.
+    `CLUSTER_URL` is the part of URL of the ACM console, after `multicloud-console.apps`.
 
 1.  Show the current identity:
 
