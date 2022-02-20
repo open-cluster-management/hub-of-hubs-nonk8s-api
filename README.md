@@ -133,3 +133,20 @@ curl https://example.com:8080/managedclusters -w "%{http_code}\n" -H "Authorizat
 curl -s https://example.com:8080/managedclusters  -H "Authorization: Bearer $TOKEN" --cacert ./certs/tls.crt |
      jq .[].metadata.name
 ```
+## Exercise the deployed API
+
+1.  Define `TOKEN` and `CLUSTER_URL` environment variables
+
+3.  Show the current identity:
+
+    ```
+    curl -k https://api.$CLUSTER_URL:6443/apis/user.openshift.io/v1/users/~ -H "Authorization: Bearer $TOKEN"
+    ```
+
+1.  Show the managed clusters in the ACM UI.
+
+1.  Show the managed clusters in Non-Kubernetes REST API:
+
+    ```
+    curl -ks  https://multicloud-console.apps.$CLUSTER_URL/multicloud/hub-of-hubs-nonk8s-api/managedclusters  -H "Authorization: Bearer $TOKEN" |  jq .[].metadata.name | sort
+    ```
