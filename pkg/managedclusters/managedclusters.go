@@ -65,6 +65,10 @@ func Patch(authorizationURL string, authorizationCABundle []byte,
 		fmt.Fprintf(gin.DefaultWriter, "got authenticated user: %v\n", user)
 		fmt.Fprintf(gin.DefaultWriter, "user groups: %v\n", groups)
 
+		if !isAuthorized(user, groups, authorizationURL, authorizationCABundle, dbConnectionPool, cluster) {
+			ginCtx.JSON(http.StatusForbidden, gin.H{"status": "the current user cannot patch the cluster"})
+		}
+
 		var patches []patch
 
 		err := ginCtx.BindJSON(&patches)
@@ -82,6 +86,23 @@ func Patch(authorizationURL string, authorizationCABundle []byte,
 		fmt.Fprintf(gin.DefaultWriter, "labels to add: %v\n", labelsToAdd)
 		fmt.Fprintf(gin.DefaultWriter, "labels to remove: %v\n", labelsToRemove)
 	}
+}
+
+func isAuthorized(user string, groups []string, authorizationURL string, authorizationCABundle []byte,
+	dbConnectionPool *pgxpool.Pool, cluster string) bool {
+	query := fmt.Sprintf(
+		"SELECT COUNT(payload) from status.managed_clusters WHERE payload -> 'metadata' ->> 'name' = '%s' AND %s",
+		cluster, filterByAuthorization(user, groups, authorizationURL, authorizationCABundle, gin.DefaultWriter))
+
+	var count int64
+
+	err := dbConnectionPool.QueryRow(context.TODO(), query).Scan(&count)
+	if err != nil {
+		fmt.Fprintf(gin.DefaultWriter, "error in quering managed clusters: %v\n", err)
+		return false
+	}
+
+	return count > 0
 }
 
 func getLabels(ginCtx *gin.Context, patches []patch) (map[string]string, map[string]struct{}, error) {
