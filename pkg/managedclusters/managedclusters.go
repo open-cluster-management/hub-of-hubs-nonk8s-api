@@ -85,7 +85,29 @@ func Patch(authorizationURL string, authorizationCABundle []byte,
 
 		fmt.Fprintf(gin.DefaultWriter, "labels to add: %v\n", labelsToAdd)
 		fmt.Fprintf(gin.DefaultWriter, "labels to remove: %v\n", labelsToRemove)
+
+		err = updateLabels(cluster, labelsToAdd, labelsToRemove, dbConnectionPool)
+		if err != nil {
+			ginCtx.String(http.StatusInternalServerError, "internal error")
+			fmt.Fprintf(gin.DefaultWriter, "error in updating managed cluster labels: %v\n", err)
+		}
 	}
+}
+
+func updateLabels(cluster string, labelsToAdd map[string]string, labelsToRemove map[string]struct{},
+	dbConnectionPool *pgxpool.Pool) error {
+	if len(labelsToAdd) == 0 && len(labelsToRemove) == 0 {
+		return nil
+	}
+
+	_, err := dbConnectionPool.Query(context.TODO(),
+		"SELECT labels, deleted_label_keys, version from spec.managed_clusters_labels WHERE managed_cluster_name = $1",
+		cluster)
+	if err != nil {
+		return fmt.Errorf("failed to read from managed_clusters_labels: %w", err)
+	}
+
+	return nil
 }
 
 func isAuthorized(user string, groups []string, authorizationURL string, authorizationCABundle []byte,
