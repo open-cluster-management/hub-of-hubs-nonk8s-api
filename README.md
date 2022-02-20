@@ -155,5 +155,5 @@ curl -s https://example.com:8080/managedclusters  -H "Authorization: Bearer $TOK
 1.  Add a label `a=b`:
 
     ```
-    curl -ks https://multicloud-console.apps.$CLUSTER_URL/multicloud/hub-of-hubs-nonk8s-api/managedclusters/cluster20 -lH "Authorization: Bearer $TOKEN" -H 'Accept: application/json' -X PATCH -d '[{"op":"add","path":"/metadata/labels/a","value":"b"}]]' -w "%{http_code}\n"
+    curl -ks https://multicloud-console.apps.$CLUSTER_URL/multicloud/hub-of-hubs-nonk8s-api/managedclusters/cluster20 -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' -X PATCH -d '[{"op":"add","path":"/metadata/labels/a","value":"b"}]]' -w "%{http_code}\n"
     ```
