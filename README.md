@@ -137,13 +137,11 @@ curl -s https://example.com:8080/managedclusters  -H "Authorization: Bearer $TOK
 
 1.  Define `TOKEN` and `CLUSTER_URL` environment variables
 
-3.  Show the current identity:
+1.  Show the current identity:
 
     ```
     curl -k https://api.$CLUSTER_URL:6443/apis/user.openshift.io/v1/users/~ -H "Authorization: Bearer $TOKEN"
     ```
-
-1.  Show the managed clusters in the ACM UI.
 
 1.  Show the managed clusters in Non-Kubernetes REST API:
 
