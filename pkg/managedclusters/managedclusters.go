@@ -24,9 +24,10 @@ import (
 )
 
 const (
-	syncIntervalInSeconds          = 4
-	onlyPatchOfLabelsIsImplemented = "only patch of labels is currently implemented"
-	onlyAddOrRemoveAreImplemented  = "only add or remove operations are currently implemented"
+	syncIntervalInSeconds              = 4
+	onlyPatchOfLabelsIsImplemented     = "only patch of labels is currently implemented"
+	onlyAddOrRemoveAreImplemented      = "only add or remove operations are currently implemented"
+	optimisticConcurrencyRetryAttempts = 5
 )
 
 var (
@@ -62,9 +63,6 @@ func Patch(authorizationURL string, authorizationCABundle []byte,
 
 		fmt.Fprintf(gin.DefaultWriter, "patch for cluster: %s\n", cluster)
 
-		fmt.Fprintf(gin.DefaultWriter, "got authenticated user: %v\n", user)
-		fmt.Fprintf(gin.DefaultWriter, "user groups: %v\n", groups)
-
 		if !isAuthorized(user, groups, authorizationURL, authorizationCABundle, dbConnectionPool, cluster) {
 			ginCtx.JSON(http.StatusForbidden, gin.H{"status": "the current user cannot patch the cluster"})
 		}
@@ -86,7 +84,17 @@ func Patch(authorizationURL string, authorizationCABundle []byte,
 		fmt.Fprintf(gin.DefaultWriter, "labels to add: %v\n", labelsToAdd)
 		fmt.Fprintf(gin.DefaultWriter, "labels to remove: %v\n", labelsToRemove)
 
-		err = updateLabels(cluster, labelsToAdd, labelsToRemove, dbConnectionPool)
+		retryAttempts := optimisticConcurrencyRetryAttempts
+
+		for retryAttempts > 0 {
+			err = updateLabels(cluster, labelsToAdd, labelsToRemove, dbConnectionPool)
+			if err == nil {
+				break
+			}
+
+			retryAttempts--
+		}
+
 		if err != nil {
 			ginCtx.String(http.StatusInternalServerError, "internal error")
 			fmt.Fprintf(gin.DefaultWriter, "error in updating managed cluster labels: %v\n", err)
@@ -106,18 +114,94 @@ func updateLabels(cluster string, labelsToAdd map[string]string, labelsToRemove 
 	if err != nil {
 		return fmt.Errorf("failed to read from managed_clusters_labels: %w", err)
 	}
+	defer rows.Close()
 
 	if !rows.Next() { // insert the labels
 		_, err := dbConnectionPool.Exec(context.TODO(),
 			`INSERT INTO spec.managed_clusters_labels (managed_cluster_name, labels,
-			deleted_label_keys, version, updated_at) values($1, $2::jsonb, $3::jsonb, $4, $5)`,
-			cluster, labelsToAdd, getKeys(labelsToRemove), 0, time.Now())
+			deleted_label_keys, version, updated_at) values($1, $2::jsonb, $3::jsonb, 0, now())`,
+			cluster, labelsToAdd, getKeys(labelsToRemove))
 		if err != nil {
 			return fmt.Errorf("failed to insert into the managed_clusters_labels table: %w", err)
 		}
+
+		return nil
+	}
+
+	var (
+		currentLabelsToAdd         map[string]string
+		currentLabelsToRemoveSlice []string
+		version                    int64
+	)
+
+	err = rows.Scan(&currentLabelsToAdd, &currentLabelsToRemoveSlice, &version)
+	if err != nil {
+		return fmt.Errorf("failed to scan a row: %w", err)
+	}
+
+	err = updateRow(cluster, labelsToAdd, currentLabelsToAdd, labelsToRemove, getMap(currentLabelsToRemoveSlice),
+		version, dbConnectionPool)
+	if err != nil {
+		return fmt.Errorf("failed to update managed_clusters_labels table: %w", err)
+	}
+
+	// assumimg there is a single row
+	if rows.Next() {
+		fmt.Fprintf(gin.DefaultWriter, "Warning: more than one row for cluster %s\n", cluster)
 	}
 
 	return nil
+}
+
+func updateRow(cluster string, labelsToAdd map[string]string, currentLabelsToAdd map[string]string,
+	labelsToRemove map[string]struct{}, currentLabelsToRemove map[string]struct{},
+	version int64, dbConnectionPool *pgxpool.Pool) error {
+	newLabelsToAdd := make(map[string]string)
+	newLabelsToRemove := make(map[string]struct{})
+
+	for key := range currentLabelsToRemove {
+		if _, keyToBeAdded := labelsToAdd[key]; !keyToBeAdded {
+			newLabelsToRemove[key] = struct{}{}
+		}
+	}
+
+	for key := range labelsToRemove {
+		newLabelsToRemove[key] = struct{}{}
+	}
+
+	for key, value := range currentLabelsToAdd {
+		if _, keyToBeRemoved := labelsToRemove[key]; !keyToBeRemoved {
+			newLabelsToAdd[key] = value
+		}
+	}
+
+	for key, value := range labelsToAdd {
+		newLabelsToAdd[key] = value
+	}
+
+	_, err := dbConnectionPool.Exec(context.TODO(),
+		`UPDATE spec.managed_clusters_labels SET
+		labels = $1::jsonb,
+		deleted_label_keys = $2::jsonb,
+		version = version + 1,
+		updated_at = now()
+		WHERE managed_cluster_name=$3 AND version=$4`,
+		newLabelsToAdd, getKeys(newLabelsToRemove), cluster, version)
+	if err != nil {
+		return fmt.Errorf("failed to insert a row: %w", err)
+	}
+
+	return nil
+}
+
+func getMap(aSlice []string) map[string]struct{} {
+	mapToReturn := make(map[string]struct{}, len(aSlice))
+
+	for _, key := range aSlice {
+		mapToReturn[key] = struct{}{}
+	}
+
+	return mapToReturn
 }
 
 // from https://stackoverflow.com/q/21362950
