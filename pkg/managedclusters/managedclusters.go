@@ -100,14 +100,37 @@ func updateLabels(cluster string, labelsToAdd map[string]string, labelsToRemove 
 		return nil
 	}
 
-	_, err := dbConnectionPool.Query(context.TODO(),
+	rows, err := dbConnectionPool.Query(context.TODO(),
 		"SELECT labels, deleted_label_keys, version from spec.managed_clusters_labels WHERE managed_cluster_name = $1",
 		cluster)
 	if err != nil {
 		return fmt.Errorf("failed to read from managed_clusters_labels: %w", err)
 	}
 
+	if !rows.Next() { // insert the labels
+		_, err := dbConnectionPool.Exec(context.TODO(),
+			`INSERT INTO spec.managed_clusters_labels (managed_cluster_name, labels,
+			deleted_label_keys, version, updated_at) values($1, $2::jsonb, $3::jsonb, $4, $5)`,
+			cluster, labelsToAdd, getKeys(labelsToRemove), 0, time.Now())
+		if err != nil {
+			return fmt.Errorf("failed to insert into the managed_clusters_labels table: %w", err)
+		}
+	}
+
 	return nil
+}
+
+// from https://stackoverflow.com/q/21362950
+func getKeys(aMap map[string]struct{}) []string {
+	keys := make([]string, len(aMap))
+	index := 0
+
+	for key := range aMap {
+		keys[index] = key
+		index++
+	}
+
+	return keys
 }
 
 func isAuthorized(user string, groups []string, authorizationURL string, authorizationCABundle []byte,
