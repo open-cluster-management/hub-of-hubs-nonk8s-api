@@ -255,7 +255,7 @@ func getLabels(ginCtx *gin.Context, patches []patch) (map[string]string, map[str
 			return nil, nil, errOnlyPatchOfLabelsIsImplemented
 		}
 
-		label := strings.Replace(rawLabel, "~", "/", 1)
+		label := strings.Replace(rawLabel, "~1", "/", 1)
 		if aPatch.Op == "add" {
 			delete(labelsToRemove, label)
 
