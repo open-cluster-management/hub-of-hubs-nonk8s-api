@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 	clusterv1 "github.com/open-cluster-management/api/cluster/v1"
 	"github.com/stolostron/hub-of-hubs-nonk8s-api/pkg/authentication"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -204,5 +205,21 @@ func handleRows(ginCtx *gin.Context, query string, dbConnectionPool *pgxpool.Poo
 		managedClusters = append(managedClusters, managedCluster)
 	}
 
-	ginCtx.JSON(http.StatusOK, managedClusters)
+	ginCtx.JSON(http.StatusOK, wrapInList(managedClusters))
+}
+
+func wrapInList(managedClusters []*clusterv1.ManagedCluster) *corev1.List {
+	list := corev1.List{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "List",
+			APIVersion: "v1",
+		},
+		ListMeta: metav1.ListMeta{},
+	}
+
+	for _, cluster := range managedClusters {
+		list.Items = append(list.Items, runtime.RawExtension{Object: cluster})
+	}
+
+	return &list
 }
