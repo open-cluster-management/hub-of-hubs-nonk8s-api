@@ -280,8 +280,8 @@ func getLabels(ginCtx *gin.Context, patches []patch) (map[string]string, map[str
 	return labelsToAdd, labelsToRemove, nil
 }
 
-// Get middleware.
-func Get(authorizationURL string, authorizationCABundle []byte,
+// List middleware.
+func List(authorizationURL string, authorizationCABundle []byte,
 	dbConnectionPool *pgxpool.Pool) gin.HandlerFunc {
 	return func(ginCtx *gin.Context) {
 		user, isCorrectType := ginCtx.MustGet(authentication.UserKey).(string)

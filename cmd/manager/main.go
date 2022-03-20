@@ -204,7 +204,7 @@ func createServer(clusterAPIURL string, clusterAPICABundle []byte, authorization
 	router.Use(authentication.Authentication(clusterAPIURL, clusterAPICABundle))
 
 	routerGroup := router.Group(basePath)
-	routerGroup.GET("/managedclusters", managedclusters.Get(authorizationURL,
+	routerGroup.GET("/managedclusters", managedclusters.List(authorizationURL,
 		authorizationCABundle, dbConnectionPool))
 
 	routerGroup.PATCH("/managedclusters/:cluster", managedclusters.Patch(authorizationURL,
