@@ -18,6 +18,7 @@ import (
 	clusterv1 "github.com/open-cluster-management/api/cluster/v1"
 	"github.com/stolostron/hub-of-hubs-nonk8s-api/pkg/authentication"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apiextensions-apiserver/pkg/registry/customresource/tableconvertor"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -35,6 +36,8 @@ const (
 // List middleware.
 func List(authorizationURL string, authorizationCABundle []byte,
 	dbConnectionPool *pgxpool.Pool) gin.HandlerFunc {
+	customResourceColumnDefinitions := getCustomResourceColumnDefinitions()
+
 	return func(ginCtx *gin.Context) {
 		user, isCorrectType := ginCtx.MustGet(authentication.UserKey).(string)
 		if !isCorrectType {
@@ -61,7 +64,7 @@ func List(authorizationURL string, authorizationCABundle []byte,
 			return
 		}
 
-		handleRows(ginCtx, query, dbConnectionPool)
+		handleRows(ginCtx, query, dbConnectionPool, customResourceColumnDefinitions)
 	}
 }
 
@@ -187,7 +190,8 @@ func sendWatchEvent(watchEvent *metav1.WatchEvent, writer io.Writer) {
 	}
 }
 
-func handleRows(ginCtx *gin.Context, query string, dbConnectionPool *pgxpool.Pool) {
+func handleRows(ginCtx *gin.Context, query string, dbConnectionPool *pgxpool.Pool,
+	customResourceColumnDefinitions []apiextensionsv1.CustomResourceColumnDefinition) {
 	rows, err := dbConnectionPool.Query(context.TODO(), query)
 	if err != nil {
 		ginCtx.String(http.StatusInternalServerError, "internal error")
@@ -211,7 +215,7 @@ func handleRows(ginCtx *gin.Context, query string, dbConnectionPool *pgxpool.Poo
 	if shouldReturnAsTable(ginCtx) {
 		fmt.Fprintf(gin.DefaultWriter, "Returning as table...\n")
 
-		tableConvertor, err := tableconvertor.New(getCustomResourceColumnDefinitions())
+		tableConvertor, err := tableconvertor.New(customResourceColumnDefinitions)
 		if err != nil {
 			fmt.Fprintf(gin.DefaultWriter, "error in creating table convertor: %v\n", err)
 			return
