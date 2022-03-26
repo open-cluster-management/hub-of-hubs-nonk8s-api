@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	set "github.com/deckarep/golang-set"
@@ -205,4 +206,19 @@ func handleRows(ginCtx *gin.Context, query string, dbConnectionPool *pgxpool.Poo
 	}
 
 	ginCtx.JSON(http.StatusOK, managedClusters)
+}
+
+func shouldReturnAsTable(ginCtx *gin.Context) bool {
+	acceptTableHeader := fmt.Sprintf("application/json;as=Table;v=%s;g=%s",
+		metav1.SchemeGroupVersion.Version, metav1.GroupName)
+
+	// implement the real negotiation logic here (with weights)
+	// see https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html
+	for _, accepted := range strings.Split(ginCtx.GetHeader("Accept"), ",") {
+		if strings.HasPrefix(accepted, acceptTableHeader) {
+			return true
+		}
+	}
+
+	return false
 }
