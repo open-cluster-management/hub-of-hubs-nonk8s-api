@@ -18,7 +18,9 @@ import (
 	clusterv1 "github.com/open-cluster-management/api/cluster/v1"
 	"github.com/stolostron/hub-of-hubs-nonk8s-api/pkg/authentication"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apiextensions-apiserver/pkg/registry/customresource/tableconvertor"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -206,10 +208,38 @@ func handleRows(ginCtx *gin.Context, query string, dbConnectionPool *pgxpool.Poo
 		managedClusters = append(managedClusters, managedCluster)
 	}
 
-	ginCtx.JSON(http.StatusOK, wrapInList(managedClusters))
+	if shouldReturnAsTable(ginCtx) {
+		fmt.Fprintf(gin.DefaultWriter, "Returning as table...\n")
+
+		tableConvertor, err := tableconvertor.New(getCustomResourceColumnDefinitions())
+		if err != nil {
+			fmt.Fprintf(gin.DefaultWriter, "error in creating table convertor: %v\n", err)
+			return
+		}
+
+		managedClustersList, err := wrapInList(managedClusters)
+		if err != nil {
+			fmt.Fprintf(gin.DefaultWriter, "error in wrapping managed clusters in a list: %v\n", err)
+			return
+		}
+
+		table, err := tableConvertor.ConvertToTable(context.TODO(), managedClustersList, nil)
+		if err != nil {
+			fmt.Fprintf(gin.DefaultWriter, "error in converting to table: %v\n", err)
+			return
+		}
+
+		table.Kind = "Table"
+		table.APIVersion = metav1.SchemeGroupVersion.String()
+		ginCtx.JSON(http.StatusOK, table)
+
+		return
+	}
+
+	ginCtx.JSON(http.StatusOK, managedClusters)
 }
 
-func wrapInList(managedClusters []*clusterv1.ManagedCluster) *corev1.List {
+func wrapInList(managedClusters []*clusterv1.ManagedCluster) (*corev1.List, error) {
 	list := corev1.List{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "List",
@@ -219,10 +249,22 @@ func wrapInList(managedClusters []*clusterv1.ManagedCluster) *corev1.List {
 	}
 
 	for _, cluster := range managedClusters {
-		list.Items = append(list.Items, runtime.RawExtension{Object: cluster})
+		// adopted from
+		// https://github.com/kubernetes/kubectl/blob/4da03973dd2fcd4645f20ac669d8a73cb017ff39/pkg/cmd/get/get.go#L786
+		clusterData, err := json.Marshal(cluster)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshall cluster: %w", err)
+		}
+
+		convertedCluster, err := runtime.Decode(unstructured.UnstructuredJSONScheme, clusterData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode: %w", err)
+		}
+
+		list.Items = append(list.Items, runtime.RawExtension{Object: convertedCluster})
 	}
 
-	return &list
+	return &list, nil
 }
 
 func shouldReturnAsTable(ginCtx *gin.Context) bool {
