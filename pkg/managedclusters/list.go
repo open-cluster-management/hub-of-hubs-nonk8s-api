@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 	clusterv1 "github.com/open-cluster-management/api/cluster/v1"
 	"github.com/stolostron/hub-of-hubs-nonk8s-api/pkg/authentication"
+	"github.com/stolostron/hub-of-hubs-nonk8s-api/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apiextensions-apiserver/pkg/registry/customresource/tableconvertor"
@@ -31,12 +32,14 @@ const (
 	onlyPatchOfLabelsIsImplemented     = "only patch of labels is currently implemented"
 	onlyAddOrRemoveAreImplemented      = "only add or remove operations are currently implemented"
 	optimisticConcurrencyRetryAttempts = 5
+	crdName                            = "managedclusters.cluster.open-cluster-management.io"
 )
 
 // List middleware.
 func List(authorizationURL string, authorizationCABundle []byte,
 	dbConnectionPool *pgxpool.Pool) gin.HandlerFunc {
-	customResourceColumnDefinitions := getCustomResourceColumnDefinitions()
+	customResourceColumnDefinitions := util.GetCustomResourceColumnDefinitions(crdName,
+		clusterv1.GroupVersion.Version)
 
 	return func(ginCtx *gin.Context) {
 		user, isCorrectType := ginCtx.MustGet(authentication.UserKey).(string)
