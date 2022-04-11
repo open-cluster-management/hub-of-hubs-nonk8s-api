@@ -16,8 +16,9 @@ import (
 )
 
 var (
-	errOnlyPatchOfLabelsIsImplemented = errors.New(onlyPatchOfLabelsIsImplemented)
-	errOnlyAddOrRemoveAreImplemented  = errors.New(onlyAddOrRemoveAreImplemented)
+	errOnlyPatchOfLabelsIsImplemented   = errors.New(onlyPatchOfLabelsIsImplemented)
+	errOnlyAddOrRemoveAreImplemented    = errors.New(onlyAddOrRemoveAreImplemented)
+	errOptimisticConcurrencyWriteFailed = errors.New(noRowsAffectedByOptimisticConcurrencyUpdate)
 )
 
 type patch struct {
@@ -164,7 +165,7 @@ func updateRow(cluster string, labelsToAdd map[string]string, currentLabelsToAdd
 		newLabelsToAdd[key] = value
 	}
 
-	_, err := dbConnectionPool.Exec(context.TODO(),
+	commandTag, err := dbConnectionPool.Exec(context.TODO(),
 		`UPDATE spec.managed_clusters_labels SET
 		labels = $1::jsonb,
 		deleted_label_keys = $2::jsonb,
@@ -173,7 +174,11 @@ func updateRow(cluster string, labelsToAdd map[string]string, currentLabelsToAdd
 		WHERE managed_cluster_name=$3 AND version=$4`,
 		newLabelsToAdd, getKeys(newLabelsToRemove), cluster, version)
 	if err != nil {
-		return fmt.Errorf("failed to insert a row: %w", err)
+		return fmt.Errorf("failed to update a row: %w", err)
+	}
+
+	if commandTag.RowsAffected() == 0 {
+		return fmt.Errorf("failed to update a row: %w", errOptimisticConcurrencyWriteFailed)
 	}
 
 	return nil

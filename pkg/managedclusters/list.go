@@ -28,11 +28,12 @@ import (
 )
 
 const (
-	syncIntervalInSeconds              = 4
-	onlyPatchOfLabelsIsImplemented     = "only patch of labels is currently implemented"
-	onlyAddOrRemoveAreImplemented      = "only add or remove operations are currently implemented"
-	optimisticConcurrencyRetryAttempts = 5
-	crdName                            = "managedclusters.cluster.open-cluster-management.io"
+	syncIntervalInSeconds                       = 4
+	onlyPatchOfLabelsIsImplemented              = "only patch of labels is currently implemented"
+	onlyAddOrRemoveAreImplemented               = "only add or remove operations are currently implemented"
+	noRowsAffectedByOptimisticConcurrencyUpdate = "no rows were affected by an optimistic-concurrency update query"
+	optimisticConcurrencyRetryAttempts          = 5
+	crdName                                     = "managedclusters.cluster.open-cluster-management.io"
 )
 
 // List middleware.
