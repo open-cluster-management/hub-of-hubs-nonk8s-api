@@ -53,7 +53,7 @@ func Patch(authorizationURL string, authorizationCABundle []byte,
 
 		fmt.Fprintf(gin.DefaultWriter, "patch for hub cluster: %s\n", hubCluster)
 
-		if !isAuthorized(user, groups, authorizationURL, authorizationCABundle, dbConnectionPool, cluster) {
+		if !isAuthorized(user, groups, authorizationURL, authorizationCABundle, dbConnectionPool, cluster, hubCluster) {
 			ginCtx.JSON(http.StatusForbidden, gin.H{"status": "the current user cannot patch the cluster"})
 		}
 
@@ -212,10 +212,10 @@ func getKeys(aMap map[string]struct{}) []string {
 }
 
 func isAuthorized(user string, groups []string, authorizationURL string, authorizationCABundle []byte,
-	dbConnectionPool *pgxpool.Pool, cluster string) bool {
+	dbConnectionPool *pgxpool.Pool, cluster string, hubCluster string) bool {
 	query := fmt.Sprintf(
-		"SELECT COUNT(payload) from status.managed_clusters WHERE payload -> 'metadata' ->> 'name' = '%s' AND %s",
-		cluster, filterByAuthorization(user, groups, authorizationURL, authorizationCABundle, gin.DefaultWriter))
+		"SELECT COUNT(payload) from status.managed_clusters WHERE payload -> 'metadata' ->> 'name' = '%s' AND 'leaf_hub_name' = '%s' AND %s",
+		cluster, hubCluster, filterByAuthorization(user, groups, authorizationURL, authorizationCABundle, gin.DefaultWriter))
 
 	var count int64
 
